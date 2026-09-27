@@ -1,0 +1,55 @@
+{
+  "name": "Your App Name",
+  "short_name": "AppName",
+  "description": "Brief description of your PWA application.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#1e40af",
+  "categories": ["productivity", "utilities"],
+  "screenshots": [
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "form_factor": "wide"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "form_factor": "narrow"
+    }
+  ],
+  "icons": [
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Shortcut Name",
+      "short_name": "Shortcut",
+      "description": "Description of what this shortcut does",
+      "url": "/path/to/feature",
+      "icons": [
+        {
+          "src": "/icons/icon-512.svg",
+          "sizes": "512x512"
+        }
+      ]
+    }
+  ],
+  "prefer_related_applications": false
+}
