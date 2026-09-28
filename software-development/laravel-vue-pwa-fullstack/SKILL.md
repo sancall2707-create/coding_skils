@@ -11,7 +11,7 @@ trigger: |
   - Tailwind CSS responsive UI
   - Vite build process
 description: |
-  Full workflow for building a production-ready Laravel + Vue 3 PWA application with role-based access control, complex business logic services, and modern frontend tooling. Optimized for incremental, sequential implementation (no upfront mega-planning). Includes debugging patterns for common build & API testing issues.
+  Full workflow for building a production-ready Laravel + Vue 3 / React PWA application with role-based access control, complex business logic services, and modern frontend tooling. Optimized for incremental, sequential implementation (no upfront mega-planning). Includes debugging patterns for common build & API testing issues.
 ---
 
 ## 1. DEVELOPMENT PHASES (Sequential Workflow)
