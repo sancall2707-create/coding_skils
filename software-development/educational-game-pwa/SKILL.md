@@ -125,10 +125,11 @@ cloudflared tunnel --url http://127.0.0.1:8000
 | Issue | Fix |
 |-------|-----|
 | Mixed content (HTTPS page, HTTP assets) | `URL::forceScheme('https')` in AppServiceProvider |
-| Card text truncation | Use `line-clamp-2` or `minmax(220px, 1fr)` grid |
+| Card text truncation/misread words | Do not overuse `line-clamp` on short theme/subtitle labels; allow wrapping with `break-words`, adequate card width, and visual screenshot check so words like `Petualangan` / `Laboratorium` are not perceived as typos. |
 | Table header overlap | `min-w-[1100px] table-auto` + `white-space: nowrap` on th/td |
 | Tab click not working | Ensure `onClick={() => setActiveTab(tab.id)}` on button, not child spans |
 | Target class "all" showing raw | Map to friendly label: `all` → `Semua Kelas` |
+| Checkpoint roadmap switching grade themes | Pass `gradeLevel` into `MissionCheckpoint` and use `getTheme(gradeLevel)` for all 4 mission nodes |
 
 ## Dependencies
 ```json
@@ -145,6 +146,7 @@ cloudflared tunnel --url http://127.0.0.1:8000
 ```
 
 ## References
+- `references/moodle-sokrates-harvesting.md` - Extraction of Moodle sections & iSpring SCORM materials
 - `references/design-system.md` - Full DESIGN.md token implementation
 - `references/audit-checklist.md` - QA checklist from dogfood session
 - `references/session-flow.md` - Student game loop state machine

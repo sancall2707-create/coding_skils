@@ -411,6 +411,7 @@ See `references/` for:
 - `educational-game-api-pattern.md` — Anonymous student token auth, server-side scoring, and teacher dashboard API architecture
 - `anonymous-session-token-auth.md` — Client-generated 32-byte token + SHA-256 hash pattern for no-login sessions
 - `educational-game-frontend-pattern.md` — React/Vite frontend architecture, DESIGN.md token integration, student game loop, teacher dashboard, certificate PDF, and Cloudflare Tunnel HTTPS fix
+- `curriculum-mapping-and-content-extraction.md` — Sokrates/Moodle CODESIGN curriculum extraction, SCORM presInfo decompression, 14–16 pertemuan → 4-mission mapping, and full educational content seeder pattern
 
 See `templates/` for:
 - `crud-controller-scaffold.php` — Starter CRUD controller
