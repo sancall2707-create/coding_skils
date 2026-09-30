@@ -307,12 +307,13 @@ curl -s -X POST http://localhost/api/bookings \
 
 ## Pitfalls & Troubleshooting
 
-### 1. API Routes Not Found (404)
-**Cause:** `php artisan install:api` was skipped or `bootstrap/app.php` doesn't register `api:` route file.
+### 1. API Routes Not Found (404) / 405 Method Not Allowed After Route Prefix Changes
+**Cause:** `php artisan install:api` was skipped, `bootstrap/app.php` doesn't register `api:` route file, or route cache is still serving old route definitions after editing prefixes like `/api/v1`.
 **Fix:**
 ```bash
 php artisan install:api --no-interaction
-# Verify routes/api.php exists
+php artisan route:clear # Flush stale cached routes after route file/prefix edits
+# Verify routes/api.php exists and is registered
 cat bootstrap/app.php | grep "api:"
 php artisan route:list | grep api
 ```
@@ -412,6 +413,8 @@ See `references/` for:
 - `anonymous-session-token-auth.md` — Client-generated 32-byte token + SHA-256 hash pattern for no-login sessions
 - `educational-game-frontend-pattern.md` — React/Vite frontend architecture, DESIGN.md token integration, student game loop, teacher dashboard, certificate PDF, and Cloudflare Tunnel HTTPS fix
 - `curriculum-mapping-and-content-extraction.md` — Sokrates/Moodle CODESIGN curriculum extraction, SCORM presInfo decompression, 14–16 pertemuan → 4-mission mapping, and full educational content seeder pattern
+- `facility-booking-approval-schema.md` — Unified facility/vehicle loan schema with 3-role multi-step approval, schedule-conflict indexes, and audit logs
+- `facility-booking-react-pwa.md` — Space Link PWA pattern: unified facility/kendaraan table, `whereDate` conflict check, React PWA structure, SW caching fix, per-phase verification gate
 
 See `templates/` for:
 - `crud-controller-scaffold.php` — Starter CRUD controller
