@@ -178,6 +178,59 @@ cloudflared tunnel --url http://127.0.0.1:8021
 @media (min-width: 480px) { .lang-grid { grid-template-columns: repeat(6, 1fr); } }
 ```
 
+### 9. Frontend Responsiveness & Request Controls (Debounce + AbortController)
+Use this pattern when speech recognition produces finalized snippets faster than the translation provider can answer. It prevents stale translations, request pileups, and Cloudflare Tunnel `Incoming request ended abruptly: context canceled` noise.
+
+```javascript
+const state = {
+  activeController: null,
+  translateDebounce: null,
+  isTranslating: false,
+};
+
+function onSentenceComplete(text) {
+  if (!text || !text.trim()) return;
+  if (state.translateDebounce) clearTimeout(state.translateDebounce);
+  if (state.activeController) {
+    state.activeController.abort();
+    state.activeController = null;
+  }
+  state.translateDebounce = setTimeout(() => executeTranslation(text.trim()), 350);
+}
+
+async function executeTranslation(text) {
+  state.isTranslating = true;
+  const controller = new AbortController();
+  state.activeController = controller;
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const translation = await translateText(text, state.selectedLang, 'id', controller.signal);
+    clearTimeout(timeoutId);
+    state.activeController = null;
+    state.isTranslating = false;
+    renderTranslation(translation);
+  } catch (err) {
+    clearTimeout(timeoutId);
+    state.activeController = null;
+    state.isTranslating = false;
+    if (err.name === 'AbortError') return; // request replaced or timed out
+    renderTranslation('[Gagal menerjemahkan: ' + (err.message || 'Koneksi lambat') + ']');
+  }
+}
+
+async function translateText(text, sourceLang, targetLang, signal) {
+  const res = await fetch('/api/translate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal,
+    body: JSON.stringify({ text, source_language: sourceLang, target_language: targetLang })
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return (await res.json()).translation;
+}
+```
+
 ## Testing Checklist (Tahap 1)
 - [ ] `php -l` syntax clean on router.php + api/*.php
 - [ ] `curl -I /css/app.css /js/app.js` → 200 OK + correct MIME
@@ -190,7 +243,12 @@ cloudflared tunnel --url http://127.0.0.1:8021
 | Issue | Fix |
 |-------|-----|
 | CSS/JS 404 on PHP built-in server | Router `return false` only works if `-t public` is passed. When running from project root with `router.php`, must explicitly `readfile($base . '/public' . $uri)` with MIME header — do NOT rely on `return false` |
-| Internal reasoning leaks into user reply | Never stream thinking/self-talk as plain text — this surfaced in this session as garbled internal text appearing mid-response. If planning is needed, do it silently in tool calls, not in prose |
+| Internal reasoning leaks into user reply | Never stream thinking/self-talk as plain text — if planning is needed, do it silently in tool calls, not in prose |
+| LLM provider too slow for real-time use | Measure latency before making LLM default. Custom endpoints through Tailscale/proxy can take 15–18s. Use free fast provider (MyMemory ~1s) as default; keep LLM as optional quality upgrade |
+| Free provider returns wrong long match | Short speech phrases trigger corpus matches 10× longer than expected. Add output-length guard: if input ≤6 words and output >18 words → reject/fallback. Also keep a deterministic phrase map for ≤4-word greetings |
+| LLM returns translation in wrong language | Enforce in system prompt: "Output ONLY the Indonesian translation. NEVER output English or original language." Set `temperature: 0.0` |
+| LLM endpoint returns SSE even with stream:false | Some custom endpoints always stream. Parse `data:` lines manually; do not rely on single JSON body |
+| Request stacking / slow spinner | Use debounce (350ms) + AbortController + 8s client timeout (see Pattern 9) |
 | SpeechRecognition not continuous | `recognition.continuous = true` + restart in `onend` if still listening |
 | Mic permission denied | Ensure HTTPS (Cloudflare tunnel), user gesture on button click |
 | Interim text flicker | Separate `state.interimText` from `state.finalText`; render combined |
