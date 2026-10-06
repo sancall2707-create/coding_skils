@@ -143,3 +143,5 @@ Browser checks:
 - **Hermes provider returns empty translation**: endpoint may be SSE streaming; parse `data:` chunks instead of reading `choices[0].message.content` from one JSON object.
 - **PWA not installable**: missing manifest icon sizes, missing service worker, or not served over HTTPS.
 - **Custom domain not immediately usable with quick tunnel**: `trycloudflare.com` quick tunnel does not support custom domain; use Named Tunnel.
+- **Frontend translation request flooding / slow UI responsiveness**: add a 350ms debounce before dispatching translation and use `AbortController` to cancel in-flight requests when the user continues speaking.
+- **Multi-project VPS context**: when multiple apps/PWAs run on the same VPS, always verify the target folder/port before starting services so one app is not mistaken for another.

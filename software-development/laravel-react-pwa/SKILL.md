@@ -67,6 +67,11 @@ public/
 10. **Build & Verify** – `npm run build` (zero errors), `php artisan test` (all green), visual smoke test via headless browser (login → dashboard).
 
 ## Pitfalls & Fixes
+- **HTTPS scheme & Cloudflare Tunnel (HTTP 419 / CSRF Mismatch)** – Behind Cloudflare Tunnel (`cloudflared`), Laravel gets requests over HTTP from local proxy. Fix 419 Page Expired:
+  1. Add `$middleware->trustProxies(at: '*');` in `bootstrap/app.php`.
+  2. Set `URL::forceScheme('https')` in `AppServiceProvider::boot()` when `APP_URL` starts with `https://` or `HTTP_X_FORWARDED_PROTO == 'https'`.
+  3. Ensure `SESSION_DRIVER=file` (or migrate session table if using `database`).
+  4. Set `APP_URL=https://<your-tunnel>.trycloudflare.com` in `.env`.
 - **HTTPS scheme on local dev** – `URL::forceScheme('https')` triggers when `APP_URL` contains `https://`. For local `php artisan serve` set `APP_URL=http://127.0.0.1:8020` (or the actual port) to avoid mixed-content asset URLs.
 - **Route cache** – after editing `routes/api.php` run `php artisan route:clear` before testing.
 - **Vue remnants** – if repo previously used Vue, delete `resources/js/*.vue`, `stores/`, `router/`, `components/`, `pages/` before adding React files.

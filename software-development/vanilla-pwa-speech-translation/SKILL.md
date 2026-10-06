@@ -244,8 +244,9 @@ async function translateText(text, sourceLang, targetLang, signal) {
 |-------|-----|
 | CSS/JS 404 on PHP built-in server | Router `return false` only works if `-t public` is passed. When running from project root with `router.php`, must explicitly `readfile($base . '/public' . $uri)` with MIME header — do NOT rely on `return false` |
 | Internal reasoning leaks into user reply | Never stream thinking/self-talk as plain text — if planning is needed, do it silently in tool calls, not in prose |
-| LLM provider too slow for real-time use | Measure latency before making LLM default. Custom endpoints through Tailscale/proxy can take 15–18s. Use free fast provider (MyMemory ~1s) as default; keep LLM as optional quality upgrade |
+| MyMemory translates common phrases incorrectly | MyMemory can return corpus matches that are semantically wrong (e.g. `I love you` → unrelated sentence). Keep deterministic short phrase dictionary for common conversational phrases; validate against source length/meaning before accepting. |
 | Free provider returns wrong long match | Short speech phrases trigger corpus matches 10× longer than expected. Add output-length guard: if input ≤6 words and output >18 words → reject/fallback. Also keep a deterministic phrase map for ≤4-word greetings |
+| LLM provider too slow for real-time use | Measure latency before making LLM default. Custom endpoints through Tailscale/proxy can take 15–18s. Use free fast provider (MyMemory ~1s) as default; keep LLM as optional quality upgrade |
 | LLM returns translation in wrong language | Enforce in system prompt: "Output ONLY the Indonesian translation. NEVER output English or original language." Set `temperature: 0.0` |
 | LLM endpoint returns SSE even with stream:false | Some custom endpoints always stream. Parse `data:` lines manually; do not rely on single JSON body |
 | Request stacking / slow spinner | Use debounce (350ms) + AbortController + 8s client timeout (see Pattern 9) |

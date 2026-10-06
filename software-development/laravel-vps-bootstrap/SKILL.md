@@ -264,3 +264,38 @@ After bootstrap completes:
 4. Configure mail, queue, storage services
 5. Add frontend (Vue 3, React, Inertia) if PWA/SPA
 6. Enable HTTPS (Caddy auto-HTTPS when domain pointed)
+
+---
+
+## Quick Existing Repository Bootstrapping (For Dev/Testing)
+
+When cloning an existing Laravel repo to VPS for fast evaluation or testing:
+
+1. **Clone & Environment Setup**
+   ```bash
+   git clone <repo-url>
+   cd <project-folder>
+   cp -n .env.example .env
+   composer install --no-interaction --prefer-dist --optimize-autoloader
+   php artisan key:generate --force
+   ```
+
+2. **SQLite Fast Database (No MariaDB/MySQL setup required)**
+   ```bash
+   sed -i 's/DB_CONNECTION=mysql/DB_CONNECTION=sqlite/' .env
+   chmod -R 775 storage bootstrap/cache
+   php artisan storage:link --force
+   php artisan migrate --force
+   php artisan db:seed --force
+   ```
+
+3. **Frontend Build & Dev Server**
+   ```bash
+   npm install && npm run build
+   php artisan serve --host=127.0.0.1 --port=<available-port, e.g. 8022>
+   ```
+
+4. **HTTPS Exposure & Seeder Credentials Check**
+   - Check `database/seeders/UserSeeder.php` or `DatabaseSeeder.php` to extract default admin credentials.
+   - Run `cloudflared tunnel --url http://127.0.0.1:<port>` to get instant HTTPS for PWA and mobile testing.
+
