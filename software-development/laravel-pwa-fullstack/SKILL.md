@@ -108,12 +108,27 @@ Complete pattern for building production-ready PWA applications with Laravel 11 
 - **Test**: Deploy new SW version, check browser DevTools Application tab → Service Worker shows `activated` state. Check Cache Storage → old cache names gone.
 
 ### Reverse Proxy & HTTPS Detection
+- **Pitfall**: Laravel Error 419 (CSRF / Page Expired) or Mixed Content behind Cloudflare Tunnel / Reverse Proxy → Laravel running on HTTP behind tunnel sends HTTP session cookies / mismatched CSRF origin.
+- **Fix 1**: In `bootstrap/app.php` (Laravel 11/12): Add `$middleware->trustProxies(at: '*');` so Laravel inspects `X-Forwarded-Proto` and `X-Forwarded-Host`.
+- **Fix 2**: In `app/Providers/AppServiceProvider.php`: Call `URL::forceScheme('https')` when `HTTP_X_FORWARDED_PROTO === 'https'` or `APP_URL` contains `https://`.
+- **Fix 3**: In `.env`: Set `APP_URL=https://<your-tunnel-domain>` and use `SESSION_DRIVER=file` (if DB session table is not migrated or schema mismatch).
 - **Pitfall**: HTTP redirect loop (`ERR_TOO_MANY_REDIRECTS`) behind Cloudflare Tunnel → Caddy configured with `:443` or `tls internal` but receives HTTP from tunnel. Sends 308 redirect back, infinite loop.
 - **Fix**: Use `:80` in Caddyfile (no TLS directives) when behind reverse proxy. Let tunnel handle SSL termination.
 - **Pitfall**: Mixed Content error (HTTPS page + HTTP Vite assets) → Laravel running on HTTP port 80 generates `http://` URLs for assets. Browser blocks mixed content.
-- **Fix 1**: Add `$middleware->trustProxies(at: '*')` in `bootstrap/app.php` to read `X-Forwarded-Proto` header from tunnel.
-- **Fix 2**: Call `URL::forceScheme('https')` in `AppServiceProvider.php` when behind proxy or `APP_URL` contains `https://`.
-- **Fix 3**: Set `APP_URL=https://your-domain` and `SANCTUM_STATEFUL_DOMAINS` in `.env`. Run `php artisan config:cache`.
+
+### Mobile PWA UI & Typography Hygiene
+- **Pitfall**: Missing back button (`←`) in sub-page headers → User gets stuck on inner views (`/super-admin/users`, `/monitoring`) without intuitive navigation back to main dashboard.
+- **Fix**: Every sub-page header MUST include a clear back button (`←` or `← Kembali`) in the top navigation bar, linking back to the parent dashboard or list view.
+- **Pitfall**: Inconsistent system font fallbacks (e.g. mobile browser falling back to cursive/handwritten/monospace system fonts) or misaligned floating buttons on small screens.
+- **Fix**: Explicitly preload Google Fonts (`Plus Jakarta Sans` & `Inter`) in `<head>`, use standard mobile shell container (`max-width: 480px; margin: 0 auto;`), and ensure action buttons use full width (`width: 100%`) with proper padding and icon alignment rather than small absolute/floating blocks.
+- **User review pattern**: When a user marks/circles a UI element in a screenshot, treat it as targeted feedback on that component. Fix the specific visual problem first (size, positioning, alignment, tap target, whitespace) before broad redesign.
+- **Role Session Mismatch in Testing**: When switching between User and Admin test links in the same browser, active session cookies can trigger `403 Access Denied`. Remind user to logout or use clear account switching.
+
+### Phase-Gated Feature Delivery for User-Reviewed PWAs
+- **Preference**: For large Laravel/PWA builds, implement one phase at a time and stop for user review. Do not continue to the next phase until the user explicitly approves the current phase.
+- **Required deliverable after each phase**: Provide a live HTTPS check link (Cloudflare Tunnel link if available), test credentials if needed, and a concise list of changed files + executed verification commands.
+- **Implementation pattern**: For backend-only phases, create a small read-only verification route/page such as `/super-admin/fase-1-check` or `/super-admin/fase-2-check` that demonstrates the new backend/model/service output without prematurely building later-phase UI.
+- **Scope control**: If a plan says “Fase 1: database/model” or “Fase 2: backend services,” avoid sneaking in full UI/UX work from later phases. Minimal diagnostic pages are allowed only to let the user check the phase.
 
 ### SPA Routing & Direct Page Reloads
 - **Pitfall**: `404 Not Found` when reloading directly on SPA routes (`/login`, `/vehicles`, `/bookings`) → Laravel has no route definition for `/login`, returns 404. Vue Router never loads.
@@ -135,6 +150,7 @@ Complete pattern for building production-ready PWA applications with Laravel 11 
 - **Real**: Tested with 08:00-12:00 vs 10:00-14:00 (overlap at 10:00-12:00) ✓
 
 ## Support References
+- `references/bruder-fic-phase-delivery.md` — Phase-gated delivery, Cloudflare proxy session fixes, mobile UX header back buttons, profile fields, character counters
 - `references/service-worker-security.md` — SW caching rules, Network-first vs Cache-first patterns, security verification, versioned SW registration
 - `references/tunnel-proxy-troubleshooting.md` — Cloudflare Tunnel / Reverse Proxy HTTPS config, Caddyfile patterns, Laravel trusted proxies, SPA route fallback
 - `references/conflict-detection-pattern.md` — Temporal & spatial conflict logic, test cases, integration pattern
