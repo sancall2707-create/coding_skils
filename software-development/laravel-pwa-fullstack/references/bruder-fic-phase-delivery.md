@@ -44,6 +44,12 @@ For formation/reflection modules:
 - Add live character counters with red (<200 or >500) and green (within range).
 - Support logbook/proof uploads: JPG/PNG/PDF max 5MB, stored under `storage/app/public/logbooks/...`.
 
+### Git & VPS Deployment / Push Pattern
+- Repository remote di VPS awal menggunakan HTTPS (`https://github.com/...`) yang meminta kredensial saat `gh` tidak terinstal.
+- VPS telah memiliki SSH key aktif untuk akun `sancall2707-create`.
+- Sebelum push dari VPS, ubah remote ke SSH: `git remote set-url origin git@github.com:sancall2707-create/<repo>.git`.
+- Pastikan berkas agent lokal seperti `/.hermes` masuk ke `.gitignore` sebelum melakukan `git add` dan commit.
+
 ## Verification Checklist
 - `php -l` new PHP files/controllers.
 - `php artisan route:list | grep <feature>`.
