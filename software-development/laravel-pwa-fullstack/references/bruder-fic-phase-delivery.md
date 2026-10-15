@@ -50,6 +50,13 @@ For formation/reflection modules:
 - Sebelum push dari VPS, ubah remote ke SSH: `git remote set-url origin git@github.com:sancall2707-create/<repo>.git`.
 - Pastikan berkas agent lokal seperti `/.hermes` masuk ke `.gitignore` sebelum melakukan `git add` dan commit.
 
+### Background Tunnel & Process Management di VPS
+- Ketika background process `php artisan serve` atau `cloudflared` mati/terhenti (misal saat restart atau pembersihan memori), port dev lokal (seperti 8022) berhenti mendengarkan (*listen*).
+- Cek port terlebih dahulu dengan `ss -tlpn | grep <port>`.
+- Jika belum aktif, jalankan service di background: `cd <project_dir> && php artisan serve --host=127.0.0.1 --port=<port>` (background=true).
+- Jalankan cloudflared tunnel di background dengan watch pattern `trycloudflare.com` untuk menangkap domain HTTPS publik instan.
+- Selalu verifikasi respons HTTP dengan `curl -s -o /dev/null -w "%{http_code}" https://<domain>/login` (harus 200).
+
 ## Verification Checklist
 - `php -l` new PHP files/controllers.
 - `php artisan route:list | grep <feature>`.

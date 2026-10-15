@@ -129,6 +129,8 @@ Complete pattern for building production-ready PWA applications with Laravel 11 
 - **Required deliverable after each phase**: Provide a live HTTPS check link (Cloudflare Tunnel link if available), test credentials if needed, and a concise list of changed files + executed verification commands.
 - **Implementation pattern**: For backend-only phases, create a small read-only verification route/page such as `/super-admin/fase-1-check` or `/super-admin/fase-2-check` that demonstrates the new backend/model/service output without prematurely building later-phase UI.
 - **Scope control**: If a plan says “Fase 1: database/model” or “Fase 2: backend services,” avoid sneaking in full UI/UX work from later phases. Minimal diagnostic pages are allowed only to let the user check the phase.
+- **Git Push & Fast-Forward Synchronization**: When collaborating across external agents (e.g. Cursor agent) and VPS, check `git status` and `git fetch origin` before starting work. If commits exist remotely, run `git pull origin main` (fast-forward) and verify tests/caches (`php artisan optimize:clear && php artisan test`) before making local modifications.
+- **Language Policy**: Always explain and report deployment, sync, git actions, and verification links strictly in Indonesian for this user. Avoid reverting to English even in terse/system output.
 
 ### SPA Routing & Direct Page Reloads
 - **Pitfall**: `404 Not Found` when reloading directly on SPA routes (`/login`, `/vehicles`, `/bookings`) → Laravel has no route definition for `/login`, returns 404. Vue Router never loads.
