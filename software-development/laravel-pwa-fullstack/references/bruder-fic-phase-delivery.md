@@ -49,6 +49,18 @@ For formation/reflection modules:
 - VPS telah memiliki SSH key aktif untuk akun `sancall2707-create`.
 - Sebelum push dari VPS, ubah remote ke SSH: `git remote set-url origin git@github.com:sancall2707-create/<repo>.git`.
 - Pastikan berkas agent lokal seperti `/.hermes` masuk ke `.gitignore` sebelum melakukan `git add` dan commit.
+- Ketika aset/fitur (seperti logo, ikon PWA, atau layout) dilaporkan belum muncul setelah `git pull origin main`, periksa seluruh remote branch via `git branch -a` dan `git log --all --grep="<keyword>" --oneline`. Seringkali pekerjaan berada di feature branch (misal `origin/cursor/...`). Lakukan checkout branch feature terkait atau tanyakan apakah ingin di-merge.
+
+### Multi-Tier Dashboard Architecture (User vs Admin TPPBM vs Super Admin)
+- **User (Bruder Muda)**: Formasi rohani harian, input laporan bimbingan/wawanhati (200-500 karakter), jurnal refleksi, agenda, dan kalender.
+- **Admin (TPPBM / Pendamping)**: Pemantauan pembinaan rohani — statistik kepatuhan bulanan, direktori bruder muda, rekam jejak bimbingan/jurnal, feed laporan terbaru, dan rilis pengumuman/sapaan pendamping. Tidak memiliki akses CRUD akun bruder atau kontrol sistem.
+- **Super Admin**: Pengendali penuh sistem teknis dan manajemen pengguna (tambah akun baru, aktivasi/nonaktifkan, hapus akun).
+- **Route Authorization Split**: Rute monitoring, direktori pengguna, dan sapaan dapat diakses oleh `role:admin,super_admin`. Hanya aksi berdampak tinggi (`users.create`, `users.store`, `users.status`, `users.destroy`) yang diisolasi eksklusif pada `role:super_admin`.
+
+### Mobile Layout & Fixed Bottom Navigation Spacing
+- Pada aplikasi PWA dengan layout mobile (`max-width: 480px; margin: 0 auto;`), bilah navigasi bawah tetap (`position: fixed; bottom: 0; left: 50%; transform: translateX(-50%)`) wajib memiliki `box-sizing: border-box`.
+- Kontainer pembungkus halaman (`.sa-body` atau `.container`) WAJIB memiliki `padding-bottom: 90px`–`100px`. Jika padding bawah kurang, kartu, tombol, atau daftar di posisi paling bawah akan terpotong atau tertutup navigasi saat digulir (*scrolled*).
+- Navigasi bawah harus mengarahkan tombol "Dashboard" secara dinamis berdasarkan peran aktif: `auth()->user()->role === 'admin' ? route('admin.dashboard') : route('superadmin.dashboard')`.
 
 ### Background Tunnel & Process Management di VPS
 - Ketika background process `php artisan serve` atau `cloudflared` mati/terhenti (misal saat restart atau pembersihan memori), port dev lokal (seperti 8022) berhenti mendengarkan (*listen*).
