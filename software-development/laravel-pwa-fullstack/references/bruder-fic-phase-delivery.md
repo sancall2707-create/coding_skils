@@ -50,6 +50,8 @@ For formation/reflection modules:
 - Sebelum push dari VPS, ubah remote ke SSH: `git remote set-url origin git@github.com:sancall2707-create/<repo>.git`.
 - Pastikan berkas agent lokal seperti `/.hermes` masuk ke `.gitignore` sebelum melakukan `git add` dan commit.
 - Ketika aset/fitur (seperti logo, ikon PWA, atau layout) dilaporkan belum muncul setelah `git pull origin main`, periksa seluruh remote branch via `git branch -a` dan `git log --all --grep="<keyword>" --oneline`. Seringkali pekerjaan berada di feature branch (misal `origin/cursor/...`). Lakukan checkout branch feature terkait atau tanyakan apakah ingin di-merge.
+- Saat menggabungkan (*merge*) feature branch Cursor ke `main`, jika timbul konflik pada `routes/web.php` atau Controller/View yang sedang dikerjakan secara paralel, teliti bagian konflik dengan cermat. Seringkali branch fitur memuat implementasi final terlengkap. Gunakan strategi resolusi terpadu, jalankan `php artisan test` untuk memastikan semua skenario fitur tetap lolos (*PASS*), lalu bersihkan cache (`php artisan optimize:clear`) sebelum melakukan commit merge dan push ke `origin/main`.
+- Untuk PWA offline support dan kompresi media: sediakan `public/sw.js` untuk cache statis serta service kompresi gambar (seperti `SapaanImageCompressor`) agar gambar profil dan sapaan tidak membebani kuota atau memperlambat render mobile.
 
 ### Multi-Tier Dashboard Architecture (User vs Admin TPPBM vs Super Admin)
 - **User (Bruder Muda)**: Formasi rohani harian, input laporan bimbingan/wawanhati (200-500 karakter), jurnal refleksi, agenda, dan kalender.
