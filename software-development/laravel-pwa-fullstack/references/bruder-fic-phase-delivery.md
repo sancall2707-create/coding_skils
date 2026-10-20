@@ -51,13 +51,38 @@ For formation/reflection modules:
 - Pastikan berkas agent lokal seperti `/.hermes` masuk ke `.gitignore` sebelum melakukan `git add` dan commit.
 - Ketika aset/fitur (seperti logo, ikon PWA, atau layout) dilaporkan belum muncul setelah `git pull origin main`, periksa seluruh remote branch via `git branch -a` dan `git log --all --grep="<keyword>" --oneline`. Seringkali pekerjaan berada di feature branch (misal `origin/cursor/...`). Lakukan checkout branch feature terkait atau tanyakan apakah ingin di-merge.
 - Saat menggabungkan (*merge*) feature branch Cursor ke `main`, jika timbul konflik pada `routes/web.php` atau Controller/View yang sedang dikerjakan secara paralel, teliti bagian konflik dengan cermat. Seringkali branch fitur memuat implementasi final terlengkap. Gunakan strategi resolusi terpadu, jalankan `php artisan test` untuk memastikan semua skenario fitur tetap lolos (*PASS*), lalu bersihkan cache (`php artisan optimize:clear`) sebelum melakukan commit merge dan push ke `origin/main`.
+- **Sinkronisasi Perubahan Data Uji VPS (SQLite & Upload Media) ke Repositori Git**:
+  - Ketika pengguna menguji aplikasi dan membuat data baru (seperti akun bruder baru `brunofic`, sapaan rohani, atau laporan) via antarmuka web di VPS, data tersebut tersimpan di `database/database.sqlite` dan `storage/app/public/`.
+  - Karena berkas `.sqlite` dan `storage/app/public/*` dikecualikan oleh `.gitignore`, perintah `git status` akan menampilkan `working tree clean`, sehingga perubahan data tersebut tidak otomatis terunggah ke GitHub.
+  - Untuk mem-push perubahan data tersebut:
+    1. Periksa entitas baru via Tinker (`App\Models\User::withTrashed()`, `ProvincialMessage::all()`, dll).
+    2. Masukkan data akun baru ke `database/seeders/UserSeeder.php` dengan hash password dan atribut lengkapnya.
+    3. Buat seeder tambahan (misal `PembinaanDataSeeder.php`) untuk data sapaan/pengumuman dan laporan uji coba, lalu daftarkan ke `DatabaseSeeder.php`.
+    4. Buat dump SQL menggunakan skrip Python (`sqlite3.connect().iterdump()`) ke berkas `database/database_seed.sql` agar seluruh struktur dan baris data terlacak di Git.
+    5. Jalankan `php artisan test`, commit, dan lakukan push ke `main`.
 - Untuk PWA offline support dan kompresi media: sediakan `public/sw.js` untuk cache statis serta service kompresi gambar (seperti `SapaanImageCompressor`) agar gambar profil dan sapaan tidak membebani kuota atau memperlambat render mobile.
 
 ### Multi-Tier Dashboard Architecture (User vs Admin TPPBM vs Super Admin)
-- **User (Bruder Muda)**: Formasi rohani harian, input laporan bimbingan/wawanhati (200-500 karakter), jurnal refleksi, agenda, dan kalender.
-- **Admin (TPPBM / Pendamping)**: Pemantauan pembinaan rohani — statistik kepatuhan bulanan, direktori bruder muda, rekam jejak bimbingan/jurnal, feed laporan terbaru, dan rilis pengumuman/sapaan pendamping. Tidak memiliki akses CRUD akun bruder atau kontrol sistem.
-- **Super Admin**: Pengendali penuh sistem teknis dan manajemen pengguna (tambah akun baru, aktivasi/nonaktifkan, hapus akun).
-- **Route Authorization Split**: Rute monitoring, direktori pengguna, dan sapaan dapat diakses oleh `role:admin,super_admin`. Hanya aksi berdampak tinggi (`users.create`, `users.store`, `users.status`, `users.destroy`) yang diisolasi eksklusif pada `role:super_admin`.
+- **User (Bruder Muda)**: Formasi rohani harian, input laporan bimbingan/wawanhati (200-500 karakter), jurnal refleksi, agenda, kalender, dan kotak pesan khusus privat.
+- **Admin (TPPBM / Pendamping)**: Pemantauan pembinaan rohani — statistik kepatuhan bulanan, direktori bruder muda, rekam jejak bimbingan/jurnal, feed laporan terbaru, rilis pengumuman/sapaan pendamping, penambahan catatan pembinaan berjenjang, dan pengiriman pesan khusus satu arah. Tidak memiliki akses buat/hapus akun bruder atau kontrol sistem.
+- **Super Admin**: Pengendali penuh sistem teknis dan manajemen pengguna (tambah akun baru dengan penetapan peran User/Admin, aktivasi/nonaktifkan, hapus akun, reset kata sandi, dan kelola peran).
+- **Route Authorization Split**: Rute monitoring, direktori pengguna, sapaan, penambahan catatan pembinaan (`users.notes.*`), dan pengiriman pesan satu arah (`users.messages.*`) dapat diakses bersama oleh `role:admin,super_admin`. Hanya aksi berdampak tinggi (`users.create`, `users.store`, `users.status`, `users.destroy`) yang diisolasi eksklusif pada `role:super_admin`.
+
+### Penyesuaian Formasi & Fitur Lanjutan Tahap 1 (Pesan Satu Arah, Catatan TPPBM, & Biodata Lengkap)
+1. **Penetapan Peran (Role) oleh Super Admin**:
+   - Super Admin dapat menentukan role saat membuat akun (`user` atau `admin`) dan dapat memperbarui peran di halaman kelola akun.
+2. **Pesan Satu Arah Privat (Direct Messaging)**:
+   - Super Admin dan Admin TPPBM dapat mengirimkan pesan arahan khusus satu arah (`direct_messages` table dengan `title`, `content`, `read_at`).
+   - Sisi user menampilkan lencana notifikasi dan kartu perhatian di Dashboard jika ada pesan belum terbaca (`read_at IS NULL`), dengan rute baca detail yang otomatis menandai pesan telah dibaca.
+3. **Catatan Pembinaan TPPBM (Mockup Halaman 6)**:
+   - Ditambahkan tombol aksi hijau `Tambahkan Catatan` pada tiap kartu bruder di daftar direktori.
+   - Form catatan menyediakan dropdown kategori: *Catatan Hidup Pribadi*, *Catatan Hidup Rohani/Doa*, *Catatan Hidup Triprasetia*, *Catatan Hidup Kerasulan*, dengan textarea uraian catatan bebas tanpa batas karakter.
+   - Catatan otomatis tersimpan ke tabel `bruder_notes` dan tampil pada halaman Track Record Individual bruder.
+4. **Penggantian / Penghapusan Foto Media pada Sapaan**:
+   - Form ubah (edit) sapaan menampilkan pratinjau foto yang sedang aktif, opsi berkas baru untuk mengganti foto dengan kompresi otomatis (`SapaanImageCompressor`), serta checkbox eksplisit `remove_image` untuk menghapus foto lampiran jika ingin beralih ke teks murni.
+5. **Ekspansi Profil Terstruktur via Kolom JSON**:
+   - Untuk data keluarga, narahubung darurat, pendidikan berjenjang (SD, SMP, SMA/SMK, S1, S2), formasi religius (Postulat, Novisiat Kanonik/Apostolik, Prasetia Pertama, Pembaruan 1-6), dan riwayat penugasan komunitas (Tugas 1-6), simpan dalam kolom JSON (`family_data`, `education_data`, `formation_data`, `assignment_data`) dengan cast `array` di Eloquent.
+   - Pertahankan sinkronisasi otomatis ke kolom flat ringkas (`parents_name`, `last_education`, `entry_year`) saat form profil disimpan untuk menjamin kompatibilitas mundur (*backward compatibility*).
 
 ### Mobile Layout & Fixed Bottom Navigation Spacing
 - Pada aplikasi PWA dengan layout mobile (`max-width: 480px; margin: 0 auto;`), bilah navigasi bawah tetap (`position: fixed; bottom: 0; left: 50%; transform: translateX(-50%)`) wajib memiliki `box-sizing: border-box`.

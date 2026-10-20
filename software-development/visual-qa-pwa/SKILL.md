@@ -102,3 +102,10 @@ browser_vision "check icon overlap, nested cards, tab radius, filter alignment, 
 - Logo: `w-10 h-10 rounded-full object-cover bg-white p-0.5 shadow-sm ring-2 ring-amber/80`
 - Text wrapper: `flex flex-col justify-center`
 - Subtitle: `leading-none mt-0.5`
+
+### PWA Form Layout, Avatar Centering & Navigation Alignment (Oct 2026)
+- **Profile Avatar Centering in Forms**: Never position user avatar thumbnails on the far left edge of a profile form. Center the avatar horizontally (`margin: 0 auto 10px; display: block; border-radius: 50%`) along with the user's name, username, and upload action.
+- **Consistent Back Navigation in Subpages**: Never place ad-hoc return buttons like `← Ke Beranda` floating on the right side of content cards. Always integrate standard PWA subheader navigation with a back arrow `<` aligned on the top bar.
+- **Bottom Navigation Conflict on Long Forms**: On complex data entry or edit forms, either hide the fixed bottom nav (`$hideBottomNav = true`) or provide at least `100px` bottom margin so that the fixed bottom navigation bar does not overlap submit buttons or form inputs when virtual keyboards open.
+- **Administrative Self-Profile Access**: When building administrative portals (Super Admin / TPPBM), ensure administrators have a dedicated, direct access point to their own profile, avatar upload, and password change (via top-bar avatar shortcut and a dedicated sidebar/hamburger item), rather than only managing subordinate accounts.
+- See `references/pwa-subpage-and-profile-patterns.md` for detailed subpage navigation, avatar centering, and mobile form collision patterns.
