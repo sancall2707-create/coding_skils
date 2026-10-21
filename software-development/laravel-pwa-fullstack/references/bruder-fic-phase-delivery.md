@@ -26,6 +26,10 @@ If user sees `403` while testing admin/user pages, first check active browser se
 - Use `Plus Jakarta Sans` + `Inter` explicitly in standalone Blade pages; mobile browsers may otherwise show ugly fallback fonts.
 - Full-width bottom actions are preferred over small floating squares unless intentionally using FAB.
 - Screenshot markups/circles are targeted feedback: fix that exact component first.
+- **Istilah Baku Bahasa Indonesia (Beranda vs Dashboard)**: Ganti semua istilah serapan bahasa Inggris "Dashboard" menjadi kata baku bahasa Indonesia **"Beranda"** pada seluruh teks antarmuka (*Beranda Bruder Muda*, *Beranda Super Admin*, *Beranda TPPBM*, *Kembali ke Beranda*).
+- **Profil Mandiri Super Admin & Admin TPPBM**: Sediakan halaman dan menu khusus bagi Super Admin dan Admin untuk mengedit profil pribadi (`/super-admin/profil`), mencakup avatar, nama lengkap, username (permanen), email, nomor telepon, komunitas tugas, bio, dan form ubah kata sandi mandiri.
+- **Tarik Pesan Satu Arah (*Direct Message Retraction*)**: Tombol tarik pesan disediakan pada riwayat kiriman form maupun halaman rekam jejak agar pengirim dapat membatalkan pesan khusus yang salah kirim.
+- **Perapian Form & Avatar Terpusat (*Center Alignment*)**: Avatar foto profil/inisial pada formulir profil wajib berada tepat di tengah (*center horizontal*), diikuti judul bagian dan nama yang simetris di bawahnya. Sembunyikan bilah navigasi bawah pada form panjang/edit (`$hideBottomNav = true`) untuk mencegah tab navigasi menutupi konten form atau tombol aksi simpan.
 
 ### User profile/account forms
 For religious/community PWA user management, account creation may need identity fields beyond credentials:
