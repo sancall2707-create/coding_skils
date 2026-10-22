@@ -30,6 +30,8 @@ If user sees `403` while testing admin/user pages, first check active browser se
 - **Profil Mandiri Super Admin & Admin TPPBM**: Sediakan halaman dan menu khusus bagi Super Admin dan Admin untuk mengedit profil pribadi (`/super-admin/profil`), mencakup avatar, nama lengkap, username (permanen), email, nomor telepon, komunitas tugas, bio, dan form ubah kata sandi mandiri.
 - **Tarik Pesan Satu Arah (*Direct Message Retraction*)**: Tombol tarik pesan disediakan pada riwayat kiriman form maupun halaman rekam jejak agar pengirim dapat membatalkan pesan khusus yang salah kirim.
 - **Perapian Form & Avatar Terpusat (*Center Alignment*)**: Avatar foto profil/inisial pada formulir profil wajib berada tepat di tengah (*center horizontal*), diikuti judul bagian dan nama yang simetris di bawahnya. Sembunyikan bilah navigasi bawah pada form panjang/edit (`$hideBottomNav = true`) untuk mencegah tab navigasi menutupi konten form atau tombol aksi simpan.
+- **Kelola Akun & Penyuntingan Biodata Lengkap oleh Super Admin**: Pada antarmuka Super Admin (`/super-admin/users/{user}/kelola-akun`), jangan membatasi aksi hanya pada email dan sandi. Sediakan form penyuntingan lengkap mencakup nama lengkap, tempat/tanggal lahir, kontak, data keluarga, pendidikan, formasi religius, dan penugasan komunitas. Kirimkan penanda `update_biodata = 1` agar pengujian keamanan regresi lama (yang menguji proteksi manipulasi payload) tetap lulus secara backward-compatible.
+- **Ekstraksi PDF Dokumen Spesifikasi via Venv Sementara**: Saat menerima dokumen spesifikasi atau revisi berformat PDF sementara host belum memiliki modul PDF (`pypdf`, `pymupdf`), gunakan venv sementara (`python3 -m venv /tmp/pdfvenv && /tmp/pdfvenv/bin/pip install pymupdf`) untuk membaca teks dan mengekstrak gambar rancangan mockup secara presisi.
 
 ### User profile/account forms
 For religious/community PWA user management, account creation may need identity fields beyond credentials:
@@ -80,13 +82,66 @@ For formation/reflection modules:
    - Sisi user menampilkan lencana notifikasi dan kartu perhatian di Dashboard jika ada pesan belum terbaca (`read_at IS NULL`), dengan rute baca detail yang otomatis menandai pesan telah dibaca.
 3. **Catatan Pembinaan TPPBM (Mockup Halaman 6)**:
    - Ditambahkan tombol aksi hijau `Tambahkan Catatan` pada tiap kartu bruder di daftar direktori.
-   - Form catatan menyediakan dropdown kategori: *Catatan Hidup Pribadi*, *Catatan Hidup Rohani/Doa*, *Catatan Hidup Triprasetia*, *Catatan Hidup Kerasulan*, dengan textarea uraian catatan bebas tanpa batas karakter.
-   - Catatan otomatis tersimpan ke tabel `bruder_notes` dan tampil pada halaman Track Record Individual bruder.
+   - Form catatan menyediakan dropdown kategori: *Catatan Hidup Pribadi*, *Catatan Hidup Rohani/Doa*, *Catatan Hidup Komunitas*, *Catatan Hidup Kerasulan*, *Catatan Hidup Triprasetia*, dengan textarea uraian catatan bebas tanpa batas karakter.
+   - Catatan otomatis tersimpan ke tabel `bruder_notes` dan tampil pada halaman Track Record Individual bruder serta Raport Pendampingan.
 4. **Penggantian / Penghapusan Foto Media pada Sapaan**:
    - Form ubah (edit) sapaan menampilkan pratinjau foto yang sedang aktif, opsi berkas baru untuk mengganti foto dengan kompresi otomatis (`SapaanImageCompressor`), serta checkbox eksplisit `remove_image` untuk menghapus foto lampiran jika ingin beralih ke teks murni.
 5. **Ekspansi Profil Terstruktur via Kolom JSON**:
    - Untuk data keluarga, narahubung darurat, pendidikan berjenjang (SD, SMP, SMA/SMK, S1, S2), formasi religius (Postulat, Novisiat Kanonik/Apostolik, Prasetia Pertama, Pembaruan 1-6), dan riwayat penugasan komunitas (Tugas 1-6), simpan dalam kolom JSON (`family_data`, `education_data`, `formation_data`, `assignment_data`) dengan cast `array` di Eloquent.
    - Pertahankan sinkronisasi otomatis ke kolom flat ringkas (`parents_name`, `last_education`, `entry_year`) saat form profil disimpan untuk menjamin kompatibilitas mundur (*backward compatibility*).
+
+### Otomatisasi Status Selesai pada Jadwal & Laporan Pembinaan
+- Jadwal bimbingan rohani (`SpiritualGuidanceSchedule`) dan wawanhati (`WawanhatiSchedule`) awalnya berstatus `scheduled` ("Menunggu").
+- Ketika bruder muda mengisi dan mengirimkan formulir laporan/renungan bimbingan atau wawanhati (`SpiritualGuidanceController::store` / `WawanhatiController::store`), sistem harus otomatis:
+  1. Mencari jadwal pada tanggal pertemuan atau mentor/pimpinan terkait.
+  2. Memperbarui status jadwal menjadi `completed` ("Selesai").
+  3. Menghubungkan ID jadwal ke kolom `schedule_id` pada baris laporan baru.
+- Pada `MonitoringQuery::row`, status `submitted` dipetakan sebagai `Selesai` (`status_done = true`), bukan `Menunggu`.
+- Pada `MonitoringQuery::agendas`, kueri memeriksa apakah ada laporan tersimpan untuk tanggal pertemuan tersebut agar jadwal otomatis berstatus `Selesai` secara real-time.
+
+### Filter Rentang Periode Kustom (1–12 Bulan)
+- Form monitoring dan ekspor data menyediakan dua dropdown bulan: `Dari Bulan` (`bulan`) dan `Sampai Bulan` (`bulan_akhir`), berdampingan dengan `Tahun`.
+- Gunakan kueri SQL tanggal portabel `whereBetween($column, [$start, $end])` dari tanggal 1 awal bulan pertama hingga akhir bulan kedua. Pendekatan ini aman dan optimal di SQLite, MySQL, dan PostgreSQL.
+- Label periode otomatis beradaptasi: `Januari – Agustus 2026` jika memilih rentang jamak, atau `Oktober 2026` jika satu bulan.
+- Nama file ekspor Excel/PDF otomatis mencantumkan slug rentang: `rekap-laporan-2026-01_sd_08.xls`.
+
+### Pemisahan Modul Raport Resmi A4 vs Laporan Jurnal Eksisting (Dual-Tab Architecture)
+- Pada modul monitoring evaluasi pembinaan, sediakan dua tab utama:
+  1. **Tab 1: Raport Pendampingan Bruder Muda** (`/super-admin/monitoring/raport`):
+     - Format dokumen resmi dinas Kongregasi FIC siap cetak (A4) berbasis tabel terstruktur:
+       - KOP Resmi dengan logo FIC dan unit TPPBM.
+       - Seksi A: Data Diri & Kredensial.
+       - Seksi B: Data Keluarga & Kontak Darurat (Orang Tua, Saudara, Narahubung).
+       - Seksi C: Riwayat Pendidikan Formal (SD, SMP, SMA/K, S1, S2).
+       - Seksi D: Tahapan Formasi Religius FIC (Postulat s/d Pembaruan ke-6).
+       - Seksi E: Komunitas Tinggal & Perutusan (Tugas 1 s/d 6).
+       - Seksi F: Laporan Pelaksanaan Bimbingan Rohani per bulan dengan indikator visual `✓` (Hijau) / `✗` (Merah).
+       - Seksi G: Laporan Pelaksanaan Wawanhati Pimpinan Lokal per bulan dengan indikator `✓` / `✗`.
+       - Seksi H: Laporan Kegiatan Jurnal Pengembangan Diri (Pengembangan 01, 02...).
+       - Seksi I: Catatan Pendamping TPPBM (5 pilar: Pribadi, Rohani/Doa, Komunitas, Kerasulan, Triprasetia).
+       - Lembar Pengesahan & Tanda Tangan: Ketua TPPBM dan Administrator Data.
+       - Tombol cetak langsung via `window.print()` dengan CSS `@media print` yang mengisolasi kertas raport dan menyembunyikan elemen UI dashboard.
+  2. **Tab 2: Laporan Jurnal & Bimbingan** (`/super-admin/monitoring`):
+     - Mempertahankan format eksisting: kartu feed kronologis, filter rentang bulan, pencarian per bruder, dan ekspor data Excel & PDF.
+
+### Dokumentasi Arsitektur Sistem (`DESIGN.md`) & Distribusi Dokumen Native Media
+- Untuk proyek aplikasi PWA berskala produksi, sediakan berkas `DESIGN.md` komprehensif pada akar repositori yang mencakup:
+  1. Ringkasan Eksekutif & Instrumen Formatif.
+  2. Arsitektur Teknologi & Dependensi (Laravel 11, SQLite, PWA, Caddy/Cloudflare).
+  3. Design System (Mobile-first, palet warna resmi hex, tipografi, glassmorphism, avatar terpusat).
+  4. Matriks Peran Pengguna & Hak Akses (Super Admin, Admin TPPBM, Bruder Muda).
+  5. Skema Basis Data & Diagram Relasi Entity.
+  6. Spesifikasi Format Raport Pendampingan A4 & Tanda Tangan Resmi.
+  7. Otomatisasi Status & Filter Rentang Periode.
+- Ketika pengguna meminta berkas fisik melalui antarmuka Telegram, kirimkan file secara native menggunakan format tag: `MEDIA:/path/absolut/ke/berkas`.
+
+### Inventaris Akun & Otentikasi Seeder/UI
+- Dokumentasikan pola kredensial akun sistem secara konsisten:
+  - Super Admin: username `superadmin` / `SuperAdmin#FIC2026`
+  - Admin TPPBM: username `admin` / `Admin#FIC2026`
+  - Demo Seeder: username `userdemo`, `bruder_anton` / `User#FIC2026`
+  - Akun Riil/Tambah Form UI: `poerw`, `brunofic`, `agsuparno`, `galihsih` / `123456`
+  - Simpan dan sinkronkan akun riil ke `database/seeders/UserSeeder.php` dan `database/database_seed.sql` agar tidak hilang saat migrasi ulang.
 
 ### Mobile Layout & Fixed Bottom Navigation Spacing
 - Pada aplikasi PWA dengan layout mobile (`max-width: 480px; margin: 0 auto;`), bilah navigasi bawah tetap (`position: fixed; bottom: 0; left: 50%; transform: translateX(-50%)`) wajib memiliki `box-sizing: border-box`.
