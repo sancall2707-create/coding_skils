@@ -266,11 +266,6 @@
         }
     }
     ```
-- **Why This Guarantees Success**:
-  1. **Continuous Flow without Empty Pages**: Blocks fill each page up to the safe threshold, dynamically expanding to 3, 4, 5, or 6 pages as data requires without giant empty spaces.
-  2. **Footer Always at the Very Bottom**: Thanks to `display: flex; flex-direction: column; justify-content: space-between; min-height: 25.8cm;`, the footer on the last page is **anchored at the very bottom of the A4 paper (at 25.8cm)**, never floating up beneath the signatures!
-  3. **Zero Collision**: Content sits inside `raport-page-body` and footer is a separate flex-child with dedicated padding and margin. Content can never overlap the footer.
-  4. **Real Page Numbers (Never 0)**: Page numbers are rendered as literal HTML text (`Halaman 1`, `Halaman 2`, etc.), completely immune to the Chromium `counter(page)` bug.
 
 ### 6. Dual-Logo Formal Header Pattern (Kop Surat Resmi)
 - For formal religious / institutional documents representing a joint committee or division:
@@ -279,4 +274,237 @@
   - Right: Program / committee seal (`logo-tppbm.png`, 58px).
   - Divider: Double horizontal rule (`border-top: 2.5px solid #0E3366; border-bottom: 0.8px solid #0E3366; height: 2px; margin-bottom: 12px;`).
 
+### 7. Dynamic Signatures Bound to RBAC Roles in Official Documents ("Tanda Tangan Raport Dinamis Berdasarkan Role Pengguna")
+- **Problem**: Hardcoding signatory names (e.g., Chairman, Administrator Data) in official Blade views or PDF templates means that when personnel, provincial appointments, or administrators change, code edits are required across multiple files.
+- **Pattern**:
+  1. **Role Definition**: Add dedicated executive roles in RBAC (e.g., `admin_ketua_tppbm` alongside `admin` and `user`) in account creation (`users.create`) and account management (`users.account.edit`).
+  2. **Role Inheritance**: In `RoleMiddleware`, ensure executive roles automatically inherit base administrative permissions:
+     ```php
+     if ($user->role === 'admin_ketua_tppbm' && in_array('admin', $roles, true)) {
+         return $next($request);
+     }
+     ```
+  3. **Dynamic Resolution**: In document builder/controller, dynamically query signatories by role with fallback:
+     ```php
+     $ketuaTppbm = User::where('role', 'admin_ketua_tppbm')->first() ?? User::where('username', 'galihsih')->first();
+     $adminData = (Auth::check() && Auth::user()->role === 'super_admin') ? Auth::user() : User::where('role', 'super_admin')->first();
+
+     $penandatangan = [
+         'ketua_tppbm' => $ketuaTppbm?->name ?? 'Br. F.A. Galih Sih Hartanta, FIC',
+         'admin_data' => $adminData?->name ?? 'Br. Andrias Purwanto, FIC',
+     ];
+     ```
+
+### 8. Full Retract (Tarik) & Edit Lifecycle for Administrative Guidance Notes
+- **Problem**: When mentors/administrators submit evaluations or guidance notes (`BruderNote` or `DirectMessage`), mistakes, typos, or wrong category classifications cannot be fixed if only a "store" action exists.
+- **Pattern**:
+  - Provide an inline history list directly below the creation form showing previously saved notes for that user.
+  - Add **Edit** button leading to a dedicated edit view (`users.notes.edit`) with `PUT` update route.
+  - Add **Tarik** button executing `DELETE` route with confirmation dialog (`onsubmit="return confirm('Tarik / hapus catatan ini?');"`).
+  - Deleted notes immediately vanish from both the history list and Section I of the official printed Raport.
+
+### 9. Differentiated User Directory Controls: Member Mentoring vs Administrator Management
+- **Problem**: When user management directories (e.g. `/super-admin/users`) are expanded to display administrative accounts (`admin`, `admin_ketua_tppbm`, `super_admin`) alongside regular members (`user`), treating all rows identically produces confusion.
+- **Pattern**:
+  1. **Query Expansion with Separation**: Exclude administrative accounts from member progress cards while listing all in user directories.
+  2. **Card Metadata Differentiation**: Regular members show completion pill (e.g., `2/2 bulan ini`), whereas administrators show distinct role badges.
+  3. **Action Button Differentiation**: Regular members receive mentoring buttons plus account management; administrators receive only account management without track record.
+  4. **Self-Action Guard**: Enforce `abort_if($user->is($request->user()), 403);` to prevent accidental self-deactivation or deletion.
+
+### 10. Client-Side Image Pre-Compression & Server Upload Limits for Profile Photos
+- **Problem**: Phone camera photos exceed default PHP and controller limits (3–8 MB), causing silent upload failures.
+- **Solution & Proven Pattern**:
+  1. Raise PHP runtime limits (`upload_max_filesize = 20M`, `post_max_size = 25M`).
+  2. Increase controller validation to 10 MB (`max:10240`).
+  3. Client-side canvas compression: Intercept `<input type="file">`, downscale to max 1200px at 0.85 JPEG quality using an `HTMLCanvasElement`, and update `input.files` with a `DataTransfer` object before submit.
+
+### 11. Headless Chrome PDF Generation on Ubuntu VPS (`google-chrome-stable` vs Snap Confinement)
+- **Problem**: Generating server-side PDFs via headless browser fails on Ubuntu VPS when using Snap wrappers.
+- **Solution**: Install native official `google-chrome-stable` deb directly via `dpkg`, and store HTML/PDF files in project storage paths (`storage_path('app/...')`) to bypass container namespace boundaries.
+
+### 12. Member Personal Logbook Edit & Delete Lifecycle (Jurnal & Agenda Pribadi)
+- On each card in member feeds (Jurnal, Agenda), provide paired `Edit` and `Hapus` actions scoped to owner (`abort_unless($record->user_id === auth()->id(), 404)`).
+
+### 13. Persona-Oriented Administrative Navigation ("Beranda Bruder Muda" over "Lihat PWA")
+- In administrative menus, use explicit domain/persona targets (e.g. **"Beranda Bruder Muda"**) rather than generic developer jargon ("Lihat PWA").
+
+### 14. Administrative Broadcast Lifecycle & Media Cleanup (Sapaan & Pengumuman)
+- Provide Create, Edit, Toggle Status, and Delete for broadcasts (`ProvincialMessage`), cleaning up associated images on disk during deletion.
+
+### 15. Blade HTML Attribute Interpolation Pitfall (No Escaped Quotes `\'` in `{{ }}`)
+- Never use backslash-escaped quotes `\'` inside Blade `{{ ... }}` within HTML attributes; use double quotes or keep confirm text neutral.
+
+### 16. Administrative Mobile Bottom Navigation & Floating Action Button (FAB) Clearance
+- Elevate `.fab` from `bottom: 24px` to `bottom: 80px` when mobile bottom navigation (`.sa-bottom-nav`) is present, and set container `padding-bottom: 76px`.
+
+### 17. Retrospective Date Boundary Enforcement Across Formative Instruments
+- For all retrospective logs (Bimbingan Rohani, Wawanhati, Jurnal Pengembangan Diri), enforce:
+  - Frontend: `max="{{ date('Y-m-d') }}"` on `<input type="date">`.
+  - Backend: `'before_or_equal:today'` validation rule.
+
+### 18. Zero Fabricated Content in Official Export Documents
+- Never render hardcoded placeholder advice in `@else` blocks of official reports. Render `-` or clean empty spaces when formators have not yet submitted notes.
+
+### 19. Handling Explicit Design Review Asks vs Immediate Execution
+- When the user asks for a review/opinion and explicitly instructs not to execute ("jangan kamu kerjakan langsung ya"), deliver a structured analytical assessment and wait for steerage before patching code.
+
+### 20. Exclusive Tab Panes vs Tall Scrollable Anchor Tabs
+- For long 5+ section forms, use real exclusive tab panes (`display: none` / `display: block`) with paired progressive step buttons (`Lanjut ke ... →`, `← ...`) and an `invalid` listener to auto-switch tabs on HTML5 validation failures.
+
+### 21. Symmetrical & Uniform Action Button Alignment in Checklist Feeds
+- Lock action pill buttons to fixed dimensions (`width: 76px; height: 32px`) across all checklist rows, enforce row `min-height: 54px`, and set `white-space: nowrap` on counter badges.
+
+### 22. Clean Metric Summaries vs Cluttered Arithmetic Formulas
+- Display clean KPI targets (`Akumulasi Tahun {{ now()->year }}: {{ $val }} / 24`) without exposing raw arithmetic breakdowns like `(2 × 12)`.
+
+### 23. Auto-Submit Loading Spinner State on Mobile Forms
+- Add a lightweight global submit listener in base layouts to disable buttons and display a spinner with *"Menyimpan..."*.
+
+### 24. Future Date Filtering in Historical Reports & Resumes
+- In formation and community assignment histories, filter out future years (`$year <= now()->year`) and render ongoing assignments as `[Year] - Sekarang`.
+
+### 25. Custom Mobile Pagination Component vs Raw Laravel Links
+- Override default unstyled pagination via `Paginator::defaultView('vendor.pagination.custom')` using compact 34x34px buttons to avoid raw SVG overflows.
+
+### 26. Role-Aware Dynamic Category Labels in Content Feeds
+- Dynamically bind broadcast labels (`Sapaan TPPBM` vs `Sapaan Provinsial`) based on author role, and auto-fill author names on dropdown change.
+
+### 27. Compliance Metrics: Strictly Separate Core Mandatory Instruments from Optional Personal Journals
+- Limit expected compliance to mandatory pillars (e.g. 1 Bimbingan + 1 Wawanhati = 2x/month, 24x/year). Exclude supplemental journals from the denominator.
+
+### 28. Dual Time-Horizon Dashboard Gauges: Full-Year Cumulative vs Monthly Reset
+- Left progress ring: Calculates cumulative formation from January 1st to the current date on the active year (Target: 24, percent = $(\text{actual} / 24) \times 100\%$, capped at 100%). Month changes do not reset this gauge.
+- Right stats: Calculates actual monthly reports (Target: 2). Resets automatically to `0 / 2` (`0%`) when a new month begins.
+- Use `Carbon::now('Asia/Jakarta')` and `config(['app.timezone' => 'Asia/Jakarta'])` to guarantee timezone alignment.
+
+### 29. Omnipresent Member Agendas in Administrative Monitoring
+- **Requirement**: All personal member schedules/agendas (`PersonalAgenda`) must be seamlessly aggregated into administrative oversight (Super Admin & TPPBM monitoring calendar `/super-admin/monitoring/agenda` and dashboard "Jadwal Pembinaan & Agenda Terdekat" widget) so mentors can remind members of upcoming commitments.
+- **Pattern**:
+  - In `MonitoringQuery::agendas()`: Query `PersonalAgenda` alongside `SpiritualGuidanceSchedule` and `WawanhatiSchedule`.
+### 30. Dual Circular Progress Indicators Side-by-Side Pattern (Dashboard KPI)
+When KPI cards track both long-term accumulation (e.g. annual target 24) and short-term compliance (e.g. monthly target 2), do not render a single lonely gauge leaving large empty gaps on the right.
+
+**Markup & Styling Structure:**
+```blade
+<div class="progress-stat-card">
+    <div class="stat-header">
+        <span class="stat-title">Statistik Pembinaan Formatif</span>
+        <span class="badge badge-scheduled">{{ $stats['label_bulan'] }} {{ now('Asia/Jakarta')->year }}</span>
+    </div>
+    <div class="stat-body" style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+        <!-- DUA CIRCULAR INDICATOR BERDAMPINGAN SECARA HORIZONTAL -->
+        <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
+            <!-- Ring 1: Akumulasi Tahunan (Target 24) -->
+            <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+                <div class="stat-ring" style="width:68px; height:68px; position:relative;">
+                    <svg class="stat-ring-svg" viewBox="0 0 80 80" style="transform:rotate(-90deg); width:100%; height:100%;">
+                        <circle class="stat-ring-circle-bg" cx="40" cy="40" r="32" style="fill:none; stroke:#E0E7FE; stroke-width:7;" />
+                        <circle class="stat-ring-circle" cx="40" cy="40" r="32" style="fill:none; stroke:#1455C0; stroke-width:7; stroke-linecap:round; stroke-dasharray:201; stroke-dashoffset:{{ $ringOffsetTahun }}; transition:stroke-dashoffset 0.8s ease;" />
+                    </svg>
+                    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:13px; font-weight:800; color:#1455C0;">
+                        {{ $stats['persentase_tahun'] }}%
+                    </div>
+                </div>
+                <span style="font-size:10px; font-weight:800; color:#475467; text-align:center; white-space:nowrap;">Akumulasi Tahunan</span>
+                <span style="font-size:9.5px; font-weight:700; color:#1455C0; background:#EFF4FF; padding:1px 6px; border-radius:999px;">{{ $stats['pembinaan_tahun'] }}/24</span>
+            </div>
+
+            <!-- Ring 2: Bulan Berjalan (Target 2) -->
+            <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+                <div class="stat-ring" style="width:68px; height:68px; position:relative;">
+                    <svg class="stat-ring-svg" viewBox="0 0 80 80" style="transform:rotate(-90deg); width:100%; height:100%;">
+                        <circle class="stat-ring-circle-bg" cx="40" cy="40" r="32" style="fill:none; stroke:#E0F2FE; stroke-width:7;" />
+                        <circle class="stat-ring-circle" cx="40" cy="40" r="32" style="fill:none; stroke:#00838F; stroke-width:7; stroke-linecap:round; stroke-dasharray:201; stroke-dashoffset:{{ $ringOffsetBulan }}; transition:stroke-dashoffset 0.8s ease;" />
+                    </svg>
+                    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:13px; font-weight:800; color:#00838F;">
+                        {{ $stats['persentase_bulan'] }}%
+                    </div>
+                </div>
+                <span style="font-size:10px; font-weight:800; color:#475467; text-align:center; white-space:nowrap;">Bulan Berjalan</span>
+                <span style="font-size:9.5px; font-weight:700; color:#00838F; background:#E0F7FA; padding:1px 6px; border-radius:999px;">{{ $stats['pembinaan_bulan'] }}/2</span>
+            </div>
+        </div>
+
+        <!-- DETAIL KANAN -->
+        <div class="stat-info" style="flex:1; min-width:160px;">
+            <div style="font-size:11px; font-weight:800; color:#667085; text-transform:uppercase;">Target Formasi Bulanan</div>
+            <div style="font-size:22px; font-weight:800; color:#101828;">{{ $stats['pembinaan_bulan'] }} <span style="font-size:15px; font-weight:600; color:#667085;">/ 2 Laporan</span></div>
+            <div style="font-size:11px; color:#475467; margin-top:3px;">Target 2 kali per bulan (Bimbingan Rohani &amp; Wawanhati Pilok).</div>
+        </div>
+    </div>
+
+    <!-- DEDICATED FULL-WIDTH ACCUMULATION SUMMARY BAR -->
+    <div class="stat-year-summary">
+        <span>Akumulasi {{ $stats['label_tahunan'] }}</span>
+        <strong>{{ $stats['pembinaan_tahun'] }} / 24</strong>
+    </div>
+</div>
+```
+
+```css
+.stat-year-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed rgba(20, 85, 192, 0.18);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.35;
+    color: #1455C0;
+}
+.stat-year-summary span { min-width: 0; }
+.stat-year-summary strong {
+    flex-shrink: 0;
+    font-size: 13px;
+    font-weight: 800;
+    color: #1455C0;
+    background: #EFF4FF;
+    border-radius: 999px;
+    padding: 4px 10px;
+    white-space: nowrap;
+}
+```
+
+### 31. Service Worker Cache Invalidation on UI Assets Change
+When updating CSS, Blade templates, or static images in a PWA:
+- Browsers aggressively cache assets via the Service Worker cache (`STATIC_CACHE`, `PAGE_CACHE`).
+- Always increment the cache version constant in `public/sw.js` (e.g. `const CACHE_VERSION = '20261023a';`).
+- On activation, the Service Worker compares cache keys and purges all obsolete caches automatically (`caches.delete(cacheName)`), ensuring users immediately see updated font sizing, layout fixes, and styles upon next refresh.
+
+### 32. Legibility & Font Sizing Standards for Continuous A4 Official Raport Documents
+For continuous multi-page A4 documents printed via Chrome Headless:
+- Base body font: `12px` (not 11px) with `line-height: 1.45`.
+- Section headers: `13px` bold uppercase navy (`#0E3366`).
+- Table contents and log cards: `11.5px` (not 10.5px) with `11px` reflection narrative text.
+- Running footer text: `10.5px` (not 9.5px).
+- This 1-point increase significantly improves readability when printed or viewed on mobile screens without causing premature page overflow.
+
+### 33. Custom Domain Deployment: cPanel Shared Hosting vs VPS Architecture
+- **Problem**: When a domain is registered on a shared hosting registrar (e.g. Domainesia/cPanel), users instinctively try to deploy the Laravel PWA via cPanel "Git Version Control" into `/home/user/public_html`.
+- **Pitfalls**:
+  1. *Chrome Headless Failure*: PWA features relying on server-side PDF engines (`RaportPdfPrinter` using `google-chrome-stable`) fail completely on cPanel shared hosting because users do not have root/sudo privileges to install Debian/Ubuntu packages.
+  2. *SSL Version / Cipher Mismatch (`ERR_SSL_VERSION_OR_CIPHER_MISMATCH`)*: Accessing the domain before AutoSSL runs or while misconfigured results in SSL cipher handshake failure.
+  3. *Security & Directory Traversal*: Deploying directly to `public_html` exposes `.env` and SQLite databases if the web server document root cannot be shifted to `/public`.
+- **Pattern & Resolution (Keep VPS Engine + Direct DNS via Zone Editor)**:
+  - Do not deploy Git to cPanel. Keep the full application, database, and background processes on the VPS.
+  - In cPanel **Zone Editor** / Registrar DNS Management:
+    1. Locate or create `A` record for `@` (domain.com) and `www`.
+    2. Set Address / Value directly to the VPS public IP (e.g. `43.173.9.113`).
+    3. Remove or replace default shared hosting IP (e.g. `202.155.137.49`).
+  - On the VPS, configure Caddy or Nginx with automatic Let's Encrypt SSL:
+    ```caddy
+    formatio-fic.com, www.formatio-fic.com {
+        reverse_proxy 127.0.0.1:8022
+    }
+    ```
+  - Caddy automatically provisions and renews TLS certificates, eliminating `ERR_SSL_VERSION_OR_CIPHER_MISMATCH` without manual intervention.
+
+```bash
+# Verify rendering on mobile viewport
+browser_navigate http://localhost:8022/dashboard
+browser_vision "verify dual circular gauges side-by-side on mobile without horizontal scroll"
+```
 
