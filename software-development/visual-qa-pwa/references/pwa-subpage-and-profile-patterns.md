@@ -482,25 +482,30 @@ For continuous multi-page A4 documents printed via Chrome Headless:
 - Running footer text: `10.5px` (not 9.5px).
 - This 1-point increase significantly improves readability when printed or viewed on mobile screens without causing premature page overflow.
 
-### 33. Custom Domain Deployment: cPanel Shared Hosting vs VPS Architecture
+### 33. Custom Domain Deployment: cPanel Shared Hosting vs VPS Architecture & The IPv6/AAAA Trap
 - **Problem**: When a domain is registered on a shared hosting registrar (e.g. Domainesia/cPanel), users instinctively try to deploy the Laravel PWA via cPanel "Git Version Control" into `/home/user/public_html`.
 - **Pitfalls**:
   1. *Chrome Headless Failure*: PWA features relying on server-side PDF engines (`RaportPdfPrinter` using `google-chrome-stable`) fail completely on cPanel shared hosting because users do not have root/sudo privileges to install Debian/Ubuntu packages.
   2. *SSL Version / Cipher Mismatch (`ERR_SSL_VERSION_OR_CIPHER_MISMATCH`)*: Accessing the domain before AutoSSL runs or while misconfigured results in SSL cipher handshake failure.
   3. *Security & Directory Traversal*: Deploying directly to `public_html` exposes `.env` and SQLite databases if the web server document root cannot be shifted to `/public`.
+  4. *The Hidden `AAAA` (IPv6) Trap*: Even after changing the `A` record in cPanel Zone Editor to the VPS IP, modern browsers (Chrome, Brave, Firefox) implement Happy Eyeballs (RFC 8305) and query IPv6 first. If cPanel has leftover `AAAA` records pointing to `2001:...` (shared hosting), the browser connects to the old host via IPv6 and fails with `ERR_SSL_VERSION_OR_CIPHER_MISMATCH`.
 - **Pattern & Resolution (Keep VPS Engine + Direct DNS via Zone Editor)**:
   - Do not deploy Git to cPanel. Keep the full application, database, and background processes on the VPS.
   - In cPanel **Zone Editor** / Registrar DNS Management:
     1. Locate or create `A` record for `@` (domain.com) and `www`.
     2. Set Address / Value directly to the VPS public IP (e.g. `43.173.9.113`).
     3. Remove or replace default shared hosting IP (e.g. `202.155.137.49`).
-  - On the VPS, configure Caddy or Nginx with automatic Let's Encrypt SSL:
+    4. **Crucial**: Filter by `AAAA` and delete all `AAAA` records for the root domain and `www` so browsers do not bypass the VPS over IPv6.
+  - On the VPS, configure Caddy with automatic Let's Encrypt SSL:
     ```caddy
     formatio-fic.com, www.formatio-fic.com {
+        encode gzip
         reverse_proxy 127.0.0.1:8022
     }
     ```
-  - Caddy automatically provisions and renews TLS certificates, eliminating `ERR_SSL_VERSION_OR_CIPHER_MISMATCH` without manual intervention.
+  - Reload Caddy: `sudo systemctl reload caddy`. Caddy automatically provisions and renews TLS certificates via ALPN/HTTP-01 once DNS resolves to the VPS.
+  - In Laravel `.env`, set `APP_URL=https://formatio-fic.com` and run `php artisan config:clear`.
+  - To bypass the 14,400s (4h) client/ISP DNS cache during testing: use Incognito tab, mobile cellular data, or clear browser sockets (`brave://net-internals/#sockets`).
 
 ```bash
 # Verify rendering on mobile viewport

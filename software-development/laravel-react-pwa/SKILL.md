@@ -84,6 +84,7 @@ public/
 - **Seed before manual test** – `php artisan db:seed` after fresh migrate, and note that auto-increment IDs shift after re-seeding.
 
 ## References
+- `references/pwa-form-bulk-delete-cache-patterns.md` – form placeholder rules, bulk delete scoping & modal, SoftDeletes test assertions, avatar cache-busting.
 - `references/branding-assets-pwa.md` – logo replacement pattern, PWA icon generation, favicon, auth card & header updates.
 - `references/space-link-spec.md` – original Space Link documentation (roles, entities, flows).
 - `references/space-link-phase3-4-patterns.md` – user area & admin dashboard implementation patterns and durable bug fixes.

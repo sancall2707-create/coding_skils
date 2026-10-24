@@ -204,6 +204,10 @@ See `references/pitfalls.md` for:
 - PHP-FPM socket connection refused
 - Database connection timeouts
 - Laravel command-line errors (KEY not set, etc.)
+- Domain DNS IPv6 `AAAA` record conflict (`ERR_SSL_VERSION_OR_CIPHER_MISMATCH`)
+- `php artisan optimize` breaking PHPUnit tests (`419 Page Expired` CSRF mismatch)
+- Sluggish PWA performance: Caddy direct static file caching, server-side avatar resizing, OPcache CLI
+- PWA icon standards: Android `any` & `maskable` safe-zones vs iOS opaque white background requirements
 
 ---
 

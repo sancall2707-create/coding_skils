@@ -169,6 +169,13 @@ Complete pattern for building production-ready PWA applications with Laravel 11 
 - **Custom Clean Pagination View for Mobile PWA**: Jangan gunakan render default `$paginator->links()` mentah dari Laravel karena akan memuat ikon panah SVG raksasa dan teks panjang yang merusak layout mobile. Daftarkan custom pagination view (`Paginator::defaultView('vendor.pagination.custom')`) dengan tombol nomor halaman kotak kompak (`34px x 34px`), lencana info ringkas, dan panah terisolasi.
 - **Universal Submit Button Loading State**: Pasang skrip pencegah klik ganda (*double-submit*) otomatis pada layout utama: saat formulir disubmit, tombol submit langsung dinonaktifkan (`disabled = true`) dan label tombol berganti menjadi animasi putar (*spinner*) bertuliskan *"Menyimpan..."*.
 - **Bottom Navigation Bar for Management Mobile Views**: Bilah menu bawah (*Bottom Nav*) untuk Super Admin/Admin harus mengakomodasi menu-menu vital (Beranda, Direktori, Raport, Monitoring, Sapaan) dengan desain *glassmorphic*. Jika ada tombol aksi mengambang (*FAB*), naikkan posisi tombol (`bottom: 80px`) agar tidak menumpuk dengan bilah navigasi bawah, dan sembunyikan navigasi bawah pada `@media print`.
+- **Dual Horizontal Circular Progress Indicators for Multi-Tier Progress Tracking**: Saat menampilkan metrik kepatuhan berkala (misal: target akumulasi tahunan 24 vs target bulanan 2), jangan menaruh hanya satu lingkaran atau menyisakan ruang kosong besar asimetris di kartu dashboard. Letakkan dua circular SVG progress indicator (`width: 68px`) berdampingan secara horizontal di sisi kiri: lingkaran kiri untuk akumulasi tahun berjalan (1 Januari s.d. tanggal saat ini, tidak ter-reset saat ganti bulan), lingkaran kanan untuk capaian bulan berjalan (otomatis reset ke 0/2 tiap ganti bulan baru). Sisi kanan kartu menampung label metrik, angka detail, penjelasan instrumen wajib, dan rekapitulasi.
+- **Collection Merge vs Concat with Transformed stdClass Objects**: Pada Laravel, pemanggilan `->merge()` pada instans `Illuminate\Database\Eloquent\Collection` mengecek primary key model via `getKey()`. Jika koleksi telah dipetakan (`->map()`) menjadi objek generic (`stdClass`), pemanggilan `merge()` akan memicu fatal error 500: `Call to undefined method stdClass::getKey()`. **Solusi**: Gunakan `collect()->concat($a)->concat($b)->values()` untuk menggabungkan beberapa koleksi objek generic secara aman.
+- **Domain Mapping, cPanel AAAA IPv6 Conflict & Auto-HTTPS via Caddy**:
+  1. *Shared Hosting vs VPS*: Bila aplikasi membutuhkan binary sistem seperti `google-chrome-stable` (untuk cetak raport headless PDF) dan isolasi storage Laravel, aplikasi wajib tetap berjalan di VPS, bukan di-deploy via cPanel Git shared hosting.
+  2. *DNS Configuration*: Arahkan A record domain (`@` dan `www`) di Zone Editor registrar/cPanel ke IP publik VPS (`43.173.9.113`).
+  3. *Bahaya AAAA (IPv6) Bawaan cPanel*: cPanel secara default menyertakan record `AAAA` ke IP shared hosting. Browser modern (Brave, Chrome) memprioritaskan IPv6 (Happy Eyeballs algorithm). Jika `AAAA` masih ada, browser akan mencoba membuka IP shared hosting dan gagal dengan `ERR_SSL_VERSION_OR_CIPHER_MISMATCH`. **Wajib menghapus record AAAA** di Zone Editor jika VPS hanya memiliki IPv4.
+  4. *Caddy Reverse Proxy*: Di `/etc/caddy/Caddyfile`, tambahkan blok domain dengan `reverse_proxy 127.0.0.1:<port>`. Caddy akan otomatis menyelesaikan tantangan ACME (TLS-ALPN-01/HTTP-01) dan menerbitkan sertifikat Let's Encrypt resmi. Update `.env` dengan `APP_URL=https://<domain>` dan jalankan `php artisan config:clear`.
 
 ### SPA Routing & Direct Page Reloads
 - **Pitfall**: `404 Not Found` when reloading directly on SPA routes (`/login`, `/vehicles`, `/bookings`) → Laravel has no route definition for `/login`, returns 404. Vue Router never loads.
@@ -189,7 +196,167 @@ Complete pattern for building production-ready PWA applications with Laravel 11 
 - **Pattern**: Use minute-based overlap logic; test with: (start1 < end2) AND (start2 < end1)
 - **Real**: Tested with 08:00-12:00 vs 10:00-14:00 (overlap at 10:00-12:00) ✓
 
+### Multi-Tier PWA Asset & Photo Caching Optimization
+- **Pitfall**: App feels heavy/sluggish ("tampilan masih berat") especially on mobile after users upload high-res photos (5MB–10MB camera shots) for avatars or posts.
+- **Root Cause**:
+  1. Profile avatars and post images are stored in their raw uploaded resolution (e.g. 1MB–5MB per image).
+  2. Image streaming controllers default to `'Cache-Control' => 'private, no-store'`, forcing the browser to re-download megabytes of images on every single page navigation.
+  3. Reverse proxying all requests to single-threaded `php artisan serve` puts static assets (`.css`, `.js`, logos) in the same queue as heavy dynamic requests and PDF rendering.
+- **Fix 1: Backend Image Compression on Upload**:
+  - Implement a dedicated compressor (e.g. `ProfileImageCompressor`) using PHP GD.
+  - Scale avatars to a sensible bounding box (e.g. max `400x400` px for avatars, `1280x1280` px for article banners) and compress at quality 80%.
+  - Guard against degrading already-tiny test fixtures: if image dimensions are within limits and file size is already light (<80KB), preserve original bytes.
+  - Yields an immediate 85%–98% reduction in asset weight (e.g. 1MB down to ~20KB).
+- **Fix 2: Direct Static File Serving & Long Caching in Caddy**:
+  - In `Caddyfile`, configure `root * /path/to/public` and use `file_server` with `@static` matcher:
+    ```caddy
+    @static {
+        file
+        path *.ico *.css *.js *.gif *.webp *.avif *.jpg *.jpeg *.png *.svg *.woff *.woff2 *.webmanifest
+    }
+    header @static {
+        Cache-Control "public, max-age=31536000, immutable"
+        X-Content-Type-Options "nosniff"
+    }
+    file_server
+    @notStatic {
+        not file
+    }
+    reverse_proxy @notStatic 127.0.0.1:<port>
+    ```
+  - Static assets bypass PHP entirely, serving from memory/disk in ~50ms.
+- **Fix 3: HTTP Cache Headers & ETags on Dynamic Image Endpoints**:
+  - In photo controllers, compute an ETag (e.g. `md5($path . filemtime($fullPath))`) and send `'Cache-Control' => 'private, max-age=86400, must-revalidate'`.
+  - Return `304 Not Modified` when `If-None-Match` matches, eliminating data transfer on repeat visits.
+- **Fix 4: PHP OPcache & Laravel View Pre-compilation**:
+  - Enable OPcache in CLI (`opcache.enable_cli=1` in `/etc/php/8.3/cli/php.ini`) when running artisan serve.
+  - Run `php artisan optimize` to cache config, routes, and pre-compile Blade templates.
+
+### Asset Cache Busting & PWA Maskable Branding Replacement
+- **Pitfall**: Replacing brand logos or favicons does not update on client browsers ("di domain belum berubah tampilan logonya") due to immutable HTTP headers or Service Worker asset caching.
+- **Root Cause**: Browsers cache static images aggressively if served with `max-age=31536000, immutable`, and Service Worker precaches static URLs. Even hard refreshing may not immediately replace all sub-resources.
+- **Fix 1 (Query String Cache Busting)**: In Blade views, append version tags to static asset URLs: `<img src="/images/logo-fic.png?v=2">`, `<link rel="icon" href="/favicon.ico?v=2">`. The browser treats this as a new URL and fetches the updated asset immediately.
+- **Fix 2 (Service Worker Activation)**: Bump `CACHE_VERSION` in `public/sw.js` (e.g. from `20261023b` to `20261023c`). The Service Worker's `activate` event then purges all stale cache buckets automatically.
+- **PWA Multi-Format Emblem Generation**:
+  1. *Web & In-App Logo*: 500x500 RGBA PNG with antialiased transparent circular mask.
+  2. *Android PWA Icons*: 192x192 and 512x512 with ~12-16px padding safe zone. In `manifest.webmanifest`, register both `"purpose": "any"` and `"purpose": "maskable"` so adaptive launchers (squircle, circle, rounded rect) do not cut off perimeter text or borders.
+  3. *Apple Touch Icon (`apple-touch-icon.png`)*: iOS does not support transparent alpha in home screen icons and renders transparent pixels as solid black. Always composite the emblem over a clean white background (`#FFFFFF`) before saving.
+
+### Fatal Production Database Wipe: Config Cache Collision with RefreshDatabase & Mitigation
+- **Critical Hazard**: Running `php artisan test` after `php artisan optimize` or `php artisan config:cache` on an application using SQLite completely wipes the production SQLite database (`database/database.sqlite`)!
+- **Root Cause Analysis**:
+  1. `php artisan optimize` compiles and writes `bootstrap/cache/config.php`.
+  2. When this cached file is present, PHPUnit / Laravel test bootstrap ignores `<env name="DB_DATABASE" value=":memory:"/>` from `phpunit.xml`. It instead boots using the compiled production configuration pointing to `database/database.sqlite`.
+  3. Feature test classes that use the `RefreshDatabase` trait (`use RefreshDatabase;`) execute `migrate:fresh` at the start of each test suite.
+  4. Because the active connection is the physical SQLite database file, `migrate:fresh` drops all physical tables and wipes all runtime production data (e.g. user-registered accounts, submitted forms, uploaded logs).
+  5. Subsequent `php artisan db:seed` only restores static fixture accounts, permanently deleting any unseeded runtime data!
+  6. Furthermore, session state is cleared, producing widespread `419 Page Expired` (CSRF) errors across test suites.
+- **Mandatory Prevention & Code-Level Guard**:
+  1. *Hard Guard in `tests/TestCase.php`*: Add an explicit safety check in `setUp()` to abort execution immediately if running against a physical database:
+     ```php
+     abstract class TestCase extends BaseTestCase
+     {
+         protected function setUp(): void
+         {
+             parent::setUp();
+             $db = config('database.connections.sqlite.database');
+             if (config('database.default') === 'sqlite' && $db !== ':memory:' && ! str_ends_with((string) $db, ':memory:')) {
+                 throw new \RuntimeException("BAHAYA: Pengujian dilarang berjalan pada database fisik ({$db})! Hapus cache config terlebih dahulu.");
+             }
+         }
+     }
+     ```
+  2. *Production Destructive Command Block (`AppServiceProvider.php`)*: In `boot()`, call `DB::prohibitDestructiveCommands($this->app->isProduction());` so commands like `migrate:fresh`, `migrate:reset`, and `db:wipe` are physically blocked by Laravel in production.
+  3. *Automated Hourly SQLite Snapshot & Backup Cron*: Setup automated snapshot script (`/home/ubuntu/backups/backup-pwa-bruder.sh`) triggered hourly via `crontab` (`0 * * * * ...`), archiving timestamped copies to an external backup directory with 48-hour hourly and 30-day daily retention.
+  4. *Runtime User Seeder Mirroring*: Every official user registered manually must be back-ported into `database/seeders/UserSeeder.php` using `firstOrNew(['username' => ...])` so subsequent database seeding never drops existing production users.
+  5. *Command Hygiene*: NEVER run `php artisan test` while config is cached. Always run `php artisan optimize:clear` or `php artisan config:clear` before running test suites.
+  6. *Database Backup Before Testing*: On single-database environments (VPS with SQLite), create a snapshot copy (`cp database/database.sqlite database/database.sqlite.bak`) before running maintenance commands.
+
+### Domain Mapping & cPanel IPv6 AAAA Conflict (ERR_SSL_VERSION_OR_CIPHER_MISMATCH)
+- **Pitfall**: After changing the A record of a custom domain to point to the VPS IP, browsers (especially Brave/Chrome) still display `ERR_SSL_VERSION_OR_CIPHER_MISMATCH` or fail to connect.
+- **Root Cause**: When a domain is registered or previously parked on cPanel shared hosting (e.g. Domainesia, RapidPlex), cPanel automatically provisions an **AAAA (IPv6)** record pointing to the shared hosting server (`2001:...`). Modern browsers use the Happy Eyeballs algorithm and prioritize IPv6 connections. Even if the A (IPv4) record points to the VPS, the browser connects to the cPanel shared hosting IPv6 which lacks a valid SSL certificate for the domain.
+- **Fix**:
+  1. Open cPanel **Zone Editor** -> **Manage** -> filter by **AAAA**.
+  2. Delete any `AAAA` records for `@` (`domain.com`) and `www`.
+  3. Ensure only the `A` record points to the VPS IPv4 (`43.173.9.113`).
+  4. In Caddy, configure `domain.com, www.domain.com { ... }`. Caddy will automatically pass ACME challenge and issue Let's Encrypt / ZeroSSL certs immediately.
+  5. If user's local ISP or browser holds stale DNS cache (due to previous 14400s TTL), advise switching Brave/Chrome to "Use Secure DNS: Cloudflare (1.1.1.1)" or running `ipconfig /flushdns`.
+
+### Bulk Delete Multi-Select with Layered Security (Hapus Massal Berlapis)
+- **Pattern**: When the user requests "pilih semua / pilih sebagian / hapus massal" on a list page (e.g. journals, reports), implement the following full pattern:
+  1. *Route*: Add a named `DELETE /resource/bulk-delete` route **before** the `{model}` wildcard route so Laravel's router doesn't try to bind the literal string `"bulk-delete"` to a model ID.
+  2. *Controller method `destroyBulk(Request $request)`*: Validate that `$ids` is a non-empty array. Always append `.where('user_id', auth()->id())` (or equivalent ownership scope) to the `whereIn` query — this ensures IDs injected from a tampered form cannot delete another user's records.
+  3. *Toolbar UI*: A persistent toolbar with a "Pilih Semua" checkbox + disabled-by-default red delete button. Enable the button and update its label (`Hapus N Terpilih`) only when at least one item is selected. Use `indeterminate` state on the master checkbox when some (not all) items are checked.
+  4. *Per-card checkbox*: Position the checkbox at `position: absolute; top: 14px; right: 14px` so it overlays without displacing card content.
+  5. *Modal konfirmasi*: A single shared modal handles both single-item delete and bulk delete. Show item name for single, show count for bulk. Include a red warning "Data yang dihapus tidak dapat dipulihkan." Dismiss on outside click. Block body scroll while open.
+  6. *Hidden form injection*: For bulk delete, dynamically inject `<input type="hidden" name="ids[]" value="...">` into a dedicated hidden form via JavaScript before calling `.submit()`. Never send IDs in URL query strings.
+- **Pitfall**: Placing the `bulk-delete` route after the `{journal}` route wildcard causes Laravel to try resolving `"bulk-delete"` as a model ID, resulting in 404 or 500. **Always register the specific static route first.**
+- **Security note**: Even with JavaScript guards, always enforce ownership in `destroyBulk` at the database level — a user could craft a POST with arbitrary IDs.
+
+### Form Creation Field Cleanliness (Placeholders vs Pre-filled Values)
+- **Pitfall**: Hardcoding sample names or example data into the `value` attribute on creation views (e.g. `value="{{ old('mentor_name', 'Br. Yohanes Subagio, FIC') }}"`). When a user opens the form to log a report or schedule an agenda, the field is pre-populated with dummy text that they must manually erase ("nama pembimbing, pimpinan lokal dll. jangan diisi otomatis").
+- **Fix**: Use clean placeholders for examples (`placeholder="Contoh: Br. Yohanes Subagio, FIC"`), and leave `value="{{ old('mentor_name') }}"` (or on unified create/edit templates: `value="{{ old('mentor_name', $editing ? $schedule->mentor_name : '') }}"`). Never place example strings in the `value` attribute on creation forms.
+
+### Dynamic Profile Avatar Cache Desynchronization
+- **Pitfall**: A user uploads a new avatar/profile photo on their account page; the upload succeeds and updates the database, but the top header and profile card continue displaying the old photo while other views (like user directory lists) show the new one.
+- **Root Cause**:
+  1. The profile image URL (e.g. `/profil/foto`) has no unique identifier or hash query parameter, so the browser serves the stale file from disk/memory cache.
+  2. The endpoint sends a long `max-age` (e.g. `max-age=86400`) instead of requiring ETag revalidation.
+  3. Service Worker caches image requests via stale-while-revalidate if dynamic photo endpoints aren't explicitly exempted in `isPrivateAsset()`.
+- **Fix**:
+  1. *Versioned Cache Buster*: In Blade templates, always append a version/hash query string to dynamic avatar routes: `<img src="{{ route('profil.foto', ['v' => $user->profile_photo ? substr(md5($user->profile_photo), 0, 8) : '0']) }}">`. As soon as a new photo is saved, the filename and MD5 change, forcing the browser to fetch the new image immediately.
+  2. *Revalidation HTTP Header*: In photo streaming controllers, send `'Cache-Control' => 'private, no-cache, must-revalidate'` with an `ETag` (hash of path + filemtime). The browser will always check if the photo has changed, returning `304 Not Modified` when unchanged and `200` with fresh bytes when updated.
+  3. *Service Worker Exemption*: In `sw.js`, ensure `isPrivateAsset(pathname)` matches dynamic photo routes (`pathname === '/profil/foto' || pathname.endsWith('/foto')`) so the Service Worker lets requests hit the network directly.
+
+### Service Worker HTML Caching on Dynamic Management Dashboards (Bypass SW for Admin Routes)
+- **Pitfall**: Admin or Super Admin reports that a newly added feature, button, or column is missing / not visible ("belum ada fiturnya", "fitur masih belum bisa digunakan") even after deployment, testing, and artisan view/route clears.
+- **Root Cause**:
+  1. The PWA `public/sw.js` fetch handler intercepts document navigations (`request.mode === 'navigate' || acceptsHtml(request)`) and serves HTML pages from a client-side Service Worker Cache (`PAGE_CACHE`) using a network-first or stale-while-revalidate strategy.
+  2. If the user had opened the admin page recently on mobile, the browser serves the cached HTML snapshot from SW storage before or without replacing it, masking newly deployed server-side Blade changes.
+  3. Hard refresh on mobile PWA is non-trivial for non-technical users.
+- **Fix 1: Exempt Administrative Routes from Service Worker Handling**:
+  - In `public/sw.js`, expand `isPrivateAsset(pathname)` (or a dedicated `isAdminRoute(pathname)`) to immediately bail out of the Service Worker entirely:
+    ```javascript
+    function isPrivateAsset(pathname) {
+        return pathname.startsWith('/super-admin')
+            || pathname.startsWith('/admin')
+            || pathname === '/profil/foto'
+            || pathname.endsWith('/foto')
+            || pathname.includes('/bukti');
+    }
+    ```
+  - When `isPrivateAsset(url.pathname)` returns true, the SW `fetch` listener simply returns early without calling `event.respondWith(...)`. The browser handles the request via normal network navigation without any Service Worker caching layer.
+- **Fix 2: Bump Service Worker Version on Every Feature Deploy**:
+  - Every time an administrative view or PWA feature is updated, increment `CACHE_VERSION` in `public/sw.js` (e.g. `20261023d` → `20261023e`).
+  - In `activate` listener, purge stale cache stores: `caches.delete(PAGE_CACHE)`.
+- **Fix 3: Git Push Synchronization Before User Review**:
+  - Never announce a feature as complete while code changes are only staged or unpushed locally. Always commit, run full test suite, verify clean tree, and execute `git push origin <branch>` so remote servers, tunnels, and user browsers receive the latest code immediately.
+
+### Heterogeneous Multi-Model Bulk Deletion Pattern (Monitoring Laporan Multi-Jenis)
+- **Pattern**: When a dashboard aggregates distinct Eloquent models (e.g. `SpiritualGuidanceReport`, `WawanhatiReport`, `SelfDevelopmentJournal`) into a unified timeline view and requires unified bulk deletion:
+  1. *Composite Identifier*: Render checkboxes with a composite key: `value="{{ $report->category }}:{{ $report->id }}"` (e.g. `"bimbingan:12"`, `"wawanhati:5"`, `"jurnal:8"`).
+  2. *Single Controller Endpoint*: The bulk delete endpoint splits each item by `:` into category and integer ID, groups them by target model, and executes scoped queries with role/ownership enforcement:
+     ```php
+     match ($cat) {
+         'bimbingan' => $bimbinganIds[] = $id,
+         'wawanhati' => $wawanhatiIds[] = $id,
+         'jurnal'    => $jurnalIds[] = $id,
+     };
+     ```
+  3. *Scoped Authorization*: Each model deletion query MUST enforce ownership or role filtering (e.g. `->whereHas('user', fn ($q) => $q->where('role', 'user'))`) to prevent cross-privilege destruction.
+  4. *SoftDeletes Assertion in Tests*: If models implement `SoftDeletes`, feature tests must use `$this->assertSoftDeleted('table_name', ['id' => $id])` instead of `$this->assertDatabaseMissing(...)`.
+
+## Session Patterns (Quick Reference)
+| Sesi | Teknik | Lokasi |
+|------|--------|--------|
+| 2026-10 | Bypass SW fetch handler untuk seluruh rute admin (`/super-admin`, `/admin`) agar view Blade selalu realtime | Pitfalls → SW HTML Caching on Dynamic Management Dashboards |
+| 2026-10 | Heterogeneous bulk delete via composite key (`category:id`) dengan scoped query per model | Pitfalls → Heterogeneous Multi-Model Bulk Deletion Pattern |
+| 2026-10 | Bulk delete multi-select + modal konfirmasi + `destroyBulk` scoped ownership | Pitfalls → Bulk Delete |
+| 2026-10 | Cache-busting `?v=md5hash` pada avatar profil + `no-cache, must-revalidate` header | Pitfalls → Dynamic Profile Avatar Cache |
+| 2026-10 | Form `value` kosong pada create view — gunakan `placeholder` bukan hardcode nama contoh | Pitfalls → Form Creation Field Cleanliness |
+
 ## Support References
+- `references/production-sqlite-safeguards.md` — SQLite production safeguards: RefreshDatabase wipe prevention, kill-switch, automated hourly crontab backup script, and disaster recovery.
 - `references/bruder-fic-phase-delivery.md` — Phase-gated delivery, Cloudflare proxy session fixes, mobile UX header back buttons, profile fields, character counters
 - `references/service-worker-security.md` — SW caching rules, Network-first vs Cache-first patterns, security verification, versioned SW registration
 - `references/tunnel-proxy-troubleshooting.md` — Cloudflare Tunnel / Reverse Proxy HTTPS config, Caddyfile patterns, Laravel trusted proxies, SPA route fallback

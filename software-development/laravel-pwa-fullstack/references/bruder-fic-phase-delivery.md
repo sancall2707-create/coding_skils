@@ -136,12 +136,42 @@ For formation/reflection modules:
 - Ketika pengguna meminta berkas fisik melalui antarmuka Telegram, kirimkan file secara native menggunakan format tag: `MEDIA:/path/absolut/ke/berkas`.
 
 ### Inventaris Akun & Otentikasi Seeder/UI
-- Dokumentasikan pola kredensial akun sistem secara konsisten:
-  - Super Admin: username `superadmin` / `SuperAdmin#FIC2026`
-  - Admin TPPBM: username `admin` / `Admin#FIC2026`
-  - Demo Seeder: username `userdemo`, `bruder_anton` / `User#FIC2026`
-  - Akun Riil/Tambah Form UI: `poerw`, `brunofic`, `agsuparno`, `galihsih` / `123456`
-  - Simpan dan sinkronkan akun riil ke `database/seeders/UserSeeder.php` dan `database/database_seed.sql` agar tidak hilang saat migrasi ulang.
+- Dokumentasikan pola kredensial 11 akun resmi sistem secara konsisten di `database/seeders/UserSeeder.php`:
+  - **Super Admin**: `superadmin` / `SuperAdmin#FIC2026` (Bruder Andrias Purwanto, FIC-Cah Ndeso, penanda tangan raport kanan)
+  - **Admin Ketua TPPBM**:
+    - `sarwoyes` / `Ketua#FIC2026` (Br. Sarwo Ono, FIC, penanda tangan raport kiri)
+    - `galihsih` / `Ketua#FIC2026` (Br. F.A. Galih Sih Hartanta, FIC)
+  - **Admin Staf TPPBM**: `admin` / `Admin#FIC2026` (Admin TPPBM)
+  - **Bruder Muda (`user`)** (Standar password: `User#FIC2026`):
+    - `userdemo` (Br. Yohanes FIC)
+    - `bruder_anton` (Br. Antonius FIC)
+    - `bruder_michael` (Br. Michael FIC)
+    - `brunofic` (Br. Yohanes Sarwono, FIC)
+    - `poerw` (Br. Purwanto, FIC)
+    - `agsuparno` (Br. Agustinus Suparno, FIC)
+    - `ysapto_ficindo` (Br. Yohanes Sapto Nugroho, FIC)
+  - Simpan dan sinkronkan seluruh 11 akun ke `database/seeders/UserSeeder.php` dan `database/database_seed.sql` agar tidak hilang saat migrasi ulang.
+
+### UI Hygiene & Dashboard Anti-Clutter Rules
+- **No Mathematical Formula Clutter**: Jangan pernah menampilkan rumus aritmatika mentah di antarmuka (contoh teks: `(2 × 12)` atau `(2x12)`). Sajikan langsung angka capaian dan target bersihnya: `Akumulasi Tahun 2026: 0 / 24`.
+- **Symmetrical Action Buttons on Lists**: Seluruh tombol aksi sisi kanan pada checklist atau baris tabel wajib berukuran seragam (`width: 76px; height: 32px`) dengan tata letak flex center agar lurus simetris vertikal. Beri label info atas gaya kapsul abu-abu dengan `white-space: nowrap`.
+- **Exclusive Tab Panes on Long Mobile Forms**: Jangan biarkan form panjang tetap tersambung ke bawah saat tab ditambahkan. Terapkan sistem **tab pane eksklusif** di mana hanya satu seksi yang berstatus `active` (`display: block;`), sementara seksi lain tersembunyi (`display: none;`). Lengkapi tombol navigasi seksi bawah (*Lanjut ke Seksi Berikutnya →*).
+- **Suppression of Future Years in Formation & Assignment Records**: Pada laporan resmi/raport, sembunyikan tahapan formasi atau penugasan yang bertahun di masa depan (> tahun berjalan `now()->year`). Jika penugasan masih berlangsung ke masa depan, tuliskan sebagai `[Tahun Mulai] – Sekarang`.
+- **Author-Role Dynamic Sapaan Labels**: Sesuaikan label publikasi dan header secara otomatis mengikuti dropdown peran penulis di admin:
+  - Peran `TPPBM` $\to$ **Sapaan TPPBM** (otomatis isi penulis: `Tim Pendamping Pembinaan Bruder Muda (TPPBM)`).
+  - Peran `Pemimpin Provinsial FIC Indonesia` $\to$ **Sapaan Provinsial** (otomatis isi penulis: `Br. Agustinus Giwal Santoso, FIC`).
+- **Strict Disallowance of Future Dates on Retrospective Forms**: Formulir kegiatan lampau (bimbingan rohani, wawanhati, jurnal refleksi) wajib membatasi tanggal hanya boleh hari ini atau tanggal yang sudah lewat. Terapkan atribut HTML `max="{{ date('Y-m-d') }}"` di Blade dan aturan `'before_or_equal:today'` di validator Laravel Controller.
+- **Dual Horizontal Circular Progress Indicators (Target 24 vs 2)**:
+  - Lingkaran Kiri: Akumulasi tahunan (1 Januari s.d. tanggal saat ini) dengan target 24 kali (2x per bulan). Nilai tidak direset saat pergantian bulan.
+  - Lingkaran Kanan: Capaian bulan berjalan dengan target 2 kali (Bimbingan Rohani + Wawanhati). Nilai otomatis kembali ke `0 / 2` (0%) setiap awal bulan baru. Jurnal pengembangan diri tidak masuk dalam penyebut kepatuhan wajib.
+- **Collection Merge vs Concat with Generic Objects**: Jangan gunakan `Collection::merge()` pada Eloquent Collection saat menggabungkan array hasil `->map()` generic objects, karena akan memicu fatal error 500 `Call to undefined method stdClass::getKey()`. Gunakan `collect()->concat($a)->concat($b)->sortBy(...)->values()`.
+
+### Custom Domain Mapping, Caddy Performance & Image Compression
+- **cPanel AAAA (IPv6) Conflict**: Saat memetakan domain kustom dari registrar/cPanel ke IP VPS IPv4 (`43.173.9.113`), selalu periksa dan **hapus record AAAA (IPv6)** di cPanel Zone Editor. Browser modern memprioritaskan IPv6 dan akan gagal terhubung dengan error `ERR_SSL_VERSION_OR_CIPHER_MISMATCH` jika record AAAA lama masih ada.
+- **Direct Static File Serving & Caching in Caddy**: Hindari mengalirkan aset statis (`.css`, `.js`, `.png`, `.jpg`, `.svg`, `.ico`) melalui single-threaded PHP serve process. Di `Caddyfile`, konfigurasi `root * /path/to/public`, sajikan via `file_server`, tambahkan matcher `@static` dengan header `Cache-Control "public, max-age=31536000, immutable"`, dan arahkan hanya rute dinamis ke `reverse_proxy`.
+- **Backend Avatar Image Compression (`ProfileImageCompressor`)**: Jangan simpan foto profil mentah resolusi kamera ponsel (1MB–10MB). Lakukan resize otomatis ke maksimal 400x400 px dengan kompresi GD JPEG/WEBP kualitas 80%. Ini memangkas payload foto hingga 90%+ (dari ~1MB menjadi ~25KB–40KB). Layani foto dinamis dengan header `ETag` dan `Cache-Control: private, max-age=604800, must-revalidate` untuk mendukung respons HTTP `304 Not Modified`.
+- **Asset Cache-Busting (?v=2)**: Ketika logo institusi atau favicon diganti, tambahkan query string versi pada URL gambar di Blade views (`/images/logo-fic.png?v=2`) dan naikkan versi Service Worker di `sw.js` agar peramban klien langsung memuat logo baru tanpa terhalang cache lama.
+- **OPcache CLI on VPS**: Aktifkan `opcache.enable_cli=1` di `/etc/php/8.3/cli/php.ini` saat menjalankan `php artisan serve` di lingkungan VPS agar skrip PHP dieksekusi langsung dari bytecode RAM tanpa overhead kompilasi berulang.
 
 ### Mobile Layout & Fixed Bottom Navigation Spacing
 - Pada aplikasi PWA dengan layout mobile (`max-width: 480px; margin: 0 auto;`), bilah navigasi bawah tetap (`position: fixed; bottom: 0; left: 50%; transform: translateX(-50%)`) wajib memiliki `box-sizing: border-box`.
