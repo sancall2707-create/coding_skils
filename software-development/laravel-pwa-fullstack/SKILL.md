@@ -121,6 +121,7 @@ Complete pattern for building production-ready PWA applications with Laravel 11 
 - **Fix**: Every sub-page header MUST include a clear back button (`←` or `← Kembali`) in the top navigation bar, linking back to the parent dashboard or list view.
 - **Pitfall**: Inconsistent system font fallbacks (e.g. mobile browser falling back to cursive/handwritten/monospace system fonts) or misaligned floating buttons on small screens.
 - **Fix**: Explicitly preload Google Fonts (`Plus Jakarta Sans` & `Inter`) in `<head>`, use standard mobile shell container (`max-width: 480px; margin: 0 auto;`), and ensure action buttons use full width (`width: 100%`) with proper padding and icon alignment rather than small absolute/floating blocks.
+- **Avoid Duplicate Action Icons and Literal Symbols in Buttons**: Jangan menggabungkan ikon visual (seperti SVG plus `+` atau ikon tong sampah) dengan karakter simbol teks yang sama di dalam label tombol (misal: `<svg>plus</svg> + Tambah Agenda`). Hal ini menyebabkan tampilan ganda yang janggal di mata pengguna (`+ + Tambah Agenda`). Gunakan **hanya** ikon SVG atau simbol teks, tidak keduanya secara bersamaan: `<svg>...</svg> <span>Tambah Agenda</span>`.
 - **User review pattern**: When a user marks/circles a UI element in a screenshot, treat it as targeted feedback on that component. Fix the specific visual problem first (size, positioning, alignment, tap target, whitespace) before broad redesign.
 - **Profile Avatar Centering in Forms**: Jangan pernah menaruh thumbnail foto profil / avatar di tepi kiri formulir. Posisikan avatar tepat di tengah secara horizontal (`margin: 0 auto 10px; display: block; border-radius: 50%`) dengan bingkai rapi, diikuti nama dan username terpusat di bawahnya.
 - **Consistent Back Navigation in Subpages**: Jangan menaruh tombol teks kembali melayang di pojok kanan kartu konten (seperti `← Ke Beranda`). Gunakan layout subheader standar PWA dengan tombol panah kembali (`<` back button) yang konsisten di baris navigasi atas.
@@ -168,7 +169,7 @@ Complete pattern for building production-ready PWA applications with Laravel 11 
 - **Strict Suppression of Future Years in Historical & Assignment Records**: Pada laporan resmi/raport, sembunyikan tahapan formasi atau riwayat penugasan komunitas yang bertahun di masa depan (tahun > tahun berjalan `now()->year`). Jika penugasan masih berlangsung ke masa depan, sajikan label mengalir sebagai `[Tahun Mulai] - Sekarang`.
 - **Custom Clean Pagination View for Mobile PWA**: Jangan gunakan render default `$paginator->links()` mentah dari Laravel karena akan memuat ikon panah SVG raksasa dan teks panjang yang merusak layout mobile. Daftarkan custom pagination view (`Paginator::defaultView('vendor.pagination.custom')`) dengan tombol nomor halaman kotak kompak (`34px x 34px`), lencana info ringkas, dan panah terisolasi.
 - **Universal Submit Button Loading State**: Pasang skrip pencegah klik ganda (*double-submit*) otomatis pada layout utama: saat formulir disubmit, tombol submit langsung dinonaktifkan (`disabled = true`) dan label tombol berganti menjadi animasi putar (*spinner*) bertuliskan *"Menyimpan..."*.
-- **Bottom Navigation Bar for Management Mobile Views**: Bilah menu bawah (*Bottom Nav*) untuk Super Admin/Admin harus mengakomodasi menu-menu vital (Beranda, Direktori, Raport, Monitoring, Sapaan) dengan desain *glassmorphic*. Jika ada tombol aksi mengambang (*FAB*), naikkan posisi tombol (`bottom: 80px`) agar tidak menumpuk dengan bilah navigasi bawah, dan sembunyikan navigasi bawah pada `@media print`.
+- **Bottom Navigation Bar for Management Mobile Views**: Bilah menu bawah (*Bottom Nav*) untuk Super Admin/Admin harus mengakomodasi menu-menu vital (Beranda, Direktori, Raport, Sapaan, Profil) dengan desain *glassmorphic* dan ikon navigasi yang konsisten. Hindari memasukkan menu ganda atau duplikatif (misalnya memisahkan Raport dan Monitoring menjadi dua tombol terpisah yang membuka controller/filter yang sama); sediakan akses sub-modul melalui tab view atas. Sertakan menu **Profil** langsung di navigasi bawah agar pengguna dapat mengakses pengaturan akun secara instan tanpa harus membuka menu hamburger. Jika ada tombol aksi mengambang (*FAB*), naikkan posisi tombol (`bottom: 80px`) agar tidak menumpuk dengan bilah navigasi bawah, dan sembunyikan navigasi bawah pada `@media print`.
 - **Dual Horizontal Circular Progress Indicators for Multi-Tier Progress Tracking**: Saat menampilkan metrik kepatuhan berkala (misal: target akumulasi tahunan 24 vs target bulanan 2), jangan menaruh hanya satu lingkaran atau menyisakan ruang kosong besar asimetris di kartu dashboard. Letakkan dua circular SVG progress indicator (`width: 68px`) berdampingan secara horizontal di sisi kiri: lingkaran kiri untuk akumulasi tahun berjalan (1 Januari s.d. tanggal saat ini, tidak ter-reset saat ganti bulan), lingkaran kanan untuk capaian bulan berjalan (otomatis reset ke 0/2 tiap ganti bulan baru). Sisi kanan kartu menampung label metrik, angka detail, penjelasan instrumen wajib, dan rekapitulasi.
 - **Collection Merge vs Concat with Transformed stdClass Objects**: Pada Laravel, pemanggilan `->merge()` pada instans `Illuminate\Database\Eloquent\Collection` mengecek primary key model via `getKey()`. Jika koleksi telah dipetakan (`->map()`) menjadi objek generic (`stdClass`), pemanggilan `merge()` akan memicu fatal error 500: `Call to undefined method stdClass::getKey()`. **Solusi**: Gunakan `collect()->concat($a)->concat($b)->values()` untuk menggabungkan beberapa koleksi objek generic secara aman.
 - **Domain Mapping, cPanel AAAA IPv6 Conflict & Auto-HTTPS via Caddy**:
@@ -308,6 +309,34 @@ Complete pattern for building production-ready PWA applications with Laravel 11 
   2. *Revalidation HTTP Header*: In photo streaming controllers, send `'Cache-Control' => 'private, no-cache, must-revalidate'` with an `ETag` (hash of path + filemtime). The browser will always check if the photo has changed, returning `304 Not Modified` when unchanged and `200` with fresh bytes when updated.
   3. *Service Worker Exemption*: In `sw.js`, ensure `isPrivateAsset(pathname)` matches dynamic photo routes (`pathname === '/profil/foto' || pathname.endsWith('/foto')`) so the Service Worker lets requests hit the network directly.
 
+### Service Worker HTTP Cache Locking & Caddy Static Directives Conflict
+- **Critical Hazard**: If Caddyfile serves `*.js` with aggressive static caching (e.g. `Cache-Control "public, max-age=31536000, immutable"` under `@static`), `sw.js` gets permanently cached by the client browser for 1 year!
+- **Symptom**: User updates application on server, but browser still displays old UI even after multiple hard refreshes, while opening on another browser shows the new UI ("tampilannya kok nggak berubah ya padahal aku dah hapus cache tapi kalo di browser lain bisa berubah").
+- **Root Cause**:
+  1. The browser obeys the HTTP `Cache-Control: max-age=31536000` header on `/sw.js` and never fetches a new byte check from the server.
+  2. The browser never discovers that `CACHE_VERSION` was incremented, so the old Service Worker remains active indefinitely.
+- **Mandatory Caddyfile Rule**: In Caddyfile, explicitly exclude `/sw.js` from the immutable static file matcher, and give it zero cache:
+  ```caddy
+  @sw {
+      path /sw.js
+  }
+  header @sw {
+      Cache-Control "no-cache, no-store, must-revalidate"
+      Expires "0"
+  }
+
+  @static {
+      file
+      path *.ico *.css *.js *.gif *.webp *.avif *.jpg *.jpeg *.png *.svg *.woff *.woff2 *.webmanifest
+      not path /sw.js
+  }
+  header @static {
+      Cache-Control "public, max-age=31536000, immutable"
+      X-Content-Type-Options "nosniff"
+  }
+  ```
+- **CSS Version Tagging in Blade Layouts**: Never load bare `<link rel="stylesheet" href="/css/app.css">`. Always append an explicit cache-busting version query parameter: `<link rel="stylesheet" href="/css/fic-pwa.css?v=20261024b">` to guarantee instant client updates upon CSS modification.
+
 ### Service Worker HTML Caching on Dynamic Management Dashboards (Bypass SW for Admin Routes)
 - **Pitfall**: Admin or Super Admin reports that a newly added feature, button, or column is missing / not visible ("belum ada fiturnya", "fitur masih belum bisa digunakan") even after deployment, testing, and artisan view/route clears.
 - **Root Cause**:
@@ -345,12 +374,92 @@ Complete pattern for building production-ready PWA applications with Laravel 11 
      ```
   3. *Scoped Authorization*: Each model deletion query MUST enforce ownership or role filtering (e.g. `->whereHas('user', fn ($q) => $q->where('role', 'user'))`) to prevent cross-privilege destruction.
   4. *SoftDeletes Assertion in Tests*: If models implement `SoftDeletes`, feature tests must use `$this->assertSoftDeleted('table_name', ['id' => $id])` instead of `$this->assertDatabaseMissing(...)`.
+- **Pitfall: Filter Relasi yang Menyaring Akun Trashed/Demo**:
+  - Saat menghapus data laporan (misal bimbingan/wawanhati/jurnal) menggunakan `whereHas('user', fn ($q) => $q->where('role', 'user'))`, jika user pemilik data berstatus *soft-deleted* (`deleted_at IS NOT NULL`, contohnya akun demo yang dinonaktifkan atau dihapus saat testing), kueri `whereHas('user')` default Eloquent akan **mengecualikan** user trashed tersebut.
+  - Akibatnya query delete menghasilkan `0 row deleted` dan memunculkan feedback membingungkan bagi admin: *"0 laporan berhasil dihapus"*.
+  - **Solusi**: Gunakan `withTrashed()` pada relasi user:
+    ```php
+    ->whereHas('user', fn ($q) => $q->withTrashed()->where('role', 'user'))
+    ```
+    atau jika otorisasi sudah dijamin di level middleware rute admin/super admin, hapus langsung record berdasarkan ID terverifikasi (`$model::whereIn('id', $ids)->delete()`).
+
+### Git Remote Topic Branch Merge Workflow for Cursor/External Collaboration
+- **Pattern**: Ketika user menginstruksikan *"ambil perubahan di github"* atau *"apakah semua perubahan sudah diambil?"*:
+  1. Jalankan `git fetch --all --prune` untuk mengambil semua branch remote terbaru.
+  2. Periksa seluruh branch remote (`git branch -r`). Sering kali kontributor eksternal atau Cursor agent bekerja pada topic branch spesifik seperti `origin/cursor/<fitur>-<hash>`, bukan langsung di `origin/main`.
+  3. Bandingkan commit setiap branch terhadap branch aktif:
+     ```bash
+     for b in $(git branch -r | grep -v 'HEAD' | sed 's/origin\///'); do
+       echo "=== $b ==="
+       git log main..origin/$b --oneline
+     done
+     ```
+  4. Jika ada commit tertinggal pada topic branch aktif, lakukan fast-forward merge ke `main`:
+     ```bash
+     git merge origin/cursor/<fitur>-<hash>
+     ```
+  5. Jalankan suite pengujian lengkap (`php artisan test`) untuk memastikan integrasi tidak merusak fitur eksisting.
+  6. Push hasil merge ke `origin/main` agar branch utama di remote selalu menjadi single source of truth.
+  7. Bersihkan cache aplikasi (`php artisan optimize:clear`) dan restart service/worker yang relevan.
+
+### Broadcast Agenda Pattern (Penyebaran Agenda Massal dari Admin/Super Admin ke Seluruh Akun User)
+- **Requirement**: Admin atau Super Admin perlu menambahkan kegiatan bersama (misal: Retret Tahunan, Pertemuan Akbar, Hari Komunitas) yang secara otomatis harus masuk dan terlihat pada jadwal dan kalender seluruh akun pengguna/anggota (`role = 'user'`).
+- **Pattern**:
+  1. *Formulir Terpusat*: Sediakan form tambah agenda khusus admin (`/super-admin/monitoring/agenda/tambah`) mencakup judul, tanggal, waktu, lokasi, dan deskripsi, lengkap dengan notice box transparan yang menginformasikan bahwa agenda akan otomatis masuk ke seluruh akun user.
+  2. *Fan-Out ke Database*: Saat formulir disubmit, ambil seluruh akun anggota aktif (`User::where('role', 'user')->where('is_active', true)->get()`). Buat satu entri `PersonalAgenda` untuk masing-masing user:
+     ```php
+     foreach ($users as $user) {
+         PersonalAgenda::create([
+             'user_id' => $user->id,
+             'title' => $validated['title'],
+             'start_at' => $startAt,
+             'location' => $validated['location'],
+             'description' => $validated['description'] ?? null,
+             'status' => 'scheduled',
+         ]);
+     }
+     ```
+  3. *Umpan Balik Eksplisit (Flash Message)*: Berikan pesan flash yang secara gamblang menyebutkan jumlah akun yang menerima agenda (misal: `"Agenda '...' berhasil ditambahkan ke 22 akun Bruder Muda."`) agar admin yakin 100% bahwa distribusi ke seluruh user telah tereksekusi tanpa ragu.
+  4. *Konsistensi Kalender User & Admin*:
+     - Di sisi user (`PersonalScheduleQuery`), agenda dibaca dari entri `PersonalAgenda` miliknya sehingga langsung muncul di menu Kalender (`/kalender`), Agenda (`/agenda`), dan Beranda (`/dashboard` jadwal mendatang).
+     - Di sisi admin (`MonitoringQuery::agendas()`), kueri mengagregasi seluruh `PersonalAgenda` dan menampilkan indikator titik (*calendar dots*) pada tanggal pelaksanaan di kalender rekapitulasi monitoring.
+  5. *Aksi Hapus Terisolasi*: Sediakan tombol hapus per baris agenda di `_agenda-list.blade.php` (`/monitoring/agenda/{category}/{id}`) agar admin dapat membatalkan agenda sewaktu-waktu.
+
+### Context-Specific Action Toolbar Swapping (Penggantian Tombol Aksi Kontekstual)
+- **Pattern**: Pada halaman rekapitulasi multi-tab yang menggunakan toolbar bersama (`_toolbar.blade.php`), kebutuhan tombol aksi seringkali berbeda antar tab (misal tab "Laporan" membutuhkan tombol ekspor Excel & PDF, sedangkan tab "Agenda" membutuhkan tombol aksi utama `+ Tambah Agenda` dan tidak memerlukan ekspor).
+- **Implementasi**: Bedakan tampilan tombol aksi berdasarkan parameter konteks (`$exportKind`):
+  ```blade
+  @if($exportKind === 'agenda')
+      <div style="margin-top:12px;">
+          <a href="{{ route('superadmin.monitoring.agenda.create') }}" class="btn-primary-agenda">
+              + Tambah Agenda
+          </a>
+      </div>
+  @else
+      <div style="display:flex; gap:8px; margin-top:12px;">
+          <a href="{{ ...export excel... }}">Excel</a>
+          <a href="{{ ...export pdf... }}">PDF</a>
+      </div>
+  @endif
+  ```
+  Hal ini menghemat ruang vertikal layar mobile dan menjaga antarmuka tetap bersih tanpa tombol berlebih yang jarang digunakan.
+
+### Bottom Navigation Streamlining & Direct Profile Integration
+- **Pattern**: Hindari duplikasi item pada bilah navigasi bawah (*Bottom Nav*). Jika sub-halaman sudah terintegrasi rapi di dalam tab navigasi atas (seperti tab *Raport*, *Laporan*, *Agenda*, dan *Jurnal* di dalam modul pemantauan), jangan membuat tombol terpisah untuk *Raport* dan *Monitoring* di navigasi bawah karena keduanya membingungkan pengguna.
+- **Solusi**: Satukan di bawah satu ikon utama (*Raport*), lalu gunakan slot navigasi yang kosong untuk menu penting yang sering diakses langsung, seperti **"Profil"** (`/super-admin/profil`). Hal ini memungkinkan pengguna mengakses pengaturan akun, avatar, dan kata sandi secara instan tanpa harus membuka drawer menu samping.
 
 ## Session Patterns (Quick Reference)
 | Sesi | Teknik | Lokasi |
 |------|--------|--------|
+| 2026-10 | Cegah simbol ganda pada tombol aksi: jangan gabungkan SVG icon plus dengan karakter teks `+` (`+ + Tambah`) | Pitfalls → Mobile PWA UI & Typography Hygiene |
+| 2026-10 | Broadcast agenda massal dari Admin/Super Admin ke seluruh akun bruder via batch `PersonalAgenda` | Pitfalls → Broadcast Agenda Pattern |
+| 2026-10 | Toolbar kontekstual: ganti tombol ekspor Excel/PDF menjadi `+ Tambah Agenda` pada tab Agenda | Pitfalls → Context-Specific Action Toolbar Swapping |
+| 2026-10 | Reduksi duplikasi Bottom Nav (hapus Monitoring redundant, ganti langsung dengan Profil) | Pitfalls → Bottom Navigation Streamlining |
+| 2026-10 | Caddyfile: exclude `/sw.js` dari immutable cache + set `no-cache, no-store` agar SW selalu update | Pitfalls → SW HTTP Cache Locking & Caddy Static Directives Conflict |
 | 2026-10 | Bypass SW fetch handler untuk seluruh rute admin (`/super-admin`, `/admin`) agar view Blade selalu realtime | Pitfalls → SW HTML Caching on Dynamic Management Dashboards |
 | 2026-10 | Heterogeneous bulk delete via composite key (`category:id`) dengan scoped query per model | Pitfalls → Heterogeneous Multi-Model Bulk Deletion Pattern |
+| 2026-10 | Penanganan akun trashed/soft-deleted pada `whereHas('user')` saat hapus data relasional | Pitfalls → Heterogeneous Multi-Model Bulk Deletion Pattern |
+| 2026-10 | Alur verifikasi & merge komprehensif seluruh topic branch remote (`git fetch --all --prune`) | Pitfalls → Git Remote Topic Branch Merge Workflow |
 | 2026-10 | Bulk delete multi-select + modal konfirmasi + `destroyBulk` scoped ownership | Pitfalls → Bulk Delete |
 | 2026-10 | Cache-busting `?v=md5hash` pada avatar profil + `no-cache, must-revalidate` header | Pitfalls → Dynamic Profile Avatar Cache |
 | 2026-10 | Form `value` kosong pada create view — gunakan `placeholder` bukan hardcode nama contoh | Pitfalls → Form Creation Field Cleanliness |
