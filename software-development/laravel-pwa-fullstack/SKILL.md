@@ -448,9 +448,36 @@ Complete pattern for building production-ready PWA applications with Laravel 11 
 - **Pattern**: Hindari duplikasi item pada bilah navigasi bawah (*Bottom Nav*). Jika sub-halaman sudah terintegrasi rapi di dalam tab navigasi atas (seperti tab *Raport*, *Laporan*, *Agenda*, dan *Jurnal* di dalam modul pemantauan), jangan membuat tombol terpisah untuk *Raport* dan *Monitoring* di navigasi bawah karena keduanya membingungkan pengguna.
 - **Solusi**: Satukan di bawah satu ikon utama (*Raport*), lalu gunakan slot navigasi yang kosong untuk menu penting yang sering diakses langsung, seperti **"Profil"** (`/super-admin/profil`). Hal ini memungkinkan pengguna mengakses pengaturan akun, avatar, dan kata sandi secara instan tanpa harus membuka drawer menu samping.
 
+### Dual-Action Alignment in Management Toolbars (Symmetrical Button Pairs)
+- **Pattern**: Ketika modul menyediakan dua aksi cetak/ekspor terkait (contoh: tombol unduh file `.pdf` dan tombol buka dialog printer `window.print()`), jangan pisahkan secara asimetris di mana tombol unduh berada di atas penuh dan tombol cetak berada di bawah rata kanan.
+- **Solusi**: Posisikan kedua tombol sejajar berdampingan dalam satu baris flex horizontal (`display: flex; gap: 8px;`):
+  - Kiri: Tombol Unduh PDF (`flex: 1; display: inline-flex; justify-content: center; align-items: center; gap: 6px;`)
+  - Kanan: Tombol Cetak Raport (`flex: 1; display: inline-flex; justify-content: center; align-items: center; gap: 6px;`)
+  Hal ini menghasilkan layout mobile yang simetris, hemat ruang vertikal, dan ergonomis untuk ibu jari pengguna.
+
+### Real-time As-You-Type Filtering (Live Search with Debounce & Fetch)
+- **Requirement**: Pengguna meminta fitur pencarian instan: begitu huruf diketikkan ke dalam input, sistem langsung memunculkan hasil yang cocok tanpa perlu menekan Enter atau tombol submit ("ketika mulai dimasukan huruf di kolom pencarian sebaiknya sistem langsung menampilkan hasil yang cocok").
+- **Implementation Pattern**:
+  1. *Backend Partial Response*: Di controller, jika request bersifat AJAX (`$request->ajax()`), kembalikan potongan template daftar (`_list.blade.php`), bukan seluruh layout HTML (`return view('..._list', compact(...));`).
+  2. *Frontend Debounce & AbortController*:
+     - Tambahkan event listener `input` pada elemen `<input>`.
+     - Gunakan debounce `250ms - 300ms` agar request tidak membombardir server di setiap ketukan tombol keyboard.
+     - Pasang `AbortController` untuk membatalkan (*abort*) request sebelumnya yang belum selesai saat pengguna mengetik huruf baru.
+     - Ganti konten container list secara dinamis (`container.innerHTML = html`) dan perbarui URL query via `window.history.replaceState()`.
+  3. *Client-side Dropdown Option Filtering*: Untuk elemen `<select>` yang berisi puluhan pilihan (contoh: daftar nama bruder di toolbar filter), letakkan input teks pencarian cepat di atas `<select>`. Saat input diketik, filter array opsi secara dinamis dan sembunyikan/tampilkan opsi yang sesuai dengan kata kunci secara real-time.
+
+### Blade Escape Syntax Awareness (@ Symbol in Template Strings)
+- **Pitfall**: Menuliskan karakter at (`@`) langsung di depan kurung kurawal ganda Blade, contoh: `@{{ $journal->user->username ?? '' }}`.
+- **Root Cause**: Di Laravel Blade, `@{{ ... }}` adalah escape sequence yang dirancang untuk framework JS (Vue/Alpine). Blade akan membiarkan string tersebut dan mencetaknya mentah-mentah ke halaman browser sebagai teks: `"{{ $journal->user->username ?? '' }}"`. Pengguna akan melihat kode template mentah di antarmuka ("ini code apa kok tampil?").
+- **Fix**: Selalu gunakan konkatenasi string PHP di dalam kurung kurawal Blade: `{{ '@' . ($journal->user->username ?? '') }}`.
+
 ## Session Patterns (Quick Reference)
 | Sesi | Teknik | Lokasi |
 |------|--------|--------|
+| 2026-10 | Cegah teks template Blade mentah: gunakan `{{ '@' . $var }}` bukan `@{{ $var }}` | Pitfalls → Blade Escape Syntax Awareness |
+| 2026-10 | Real-time live search (input debounce 250ms + AbortController + `$request->ajax()`) | Pitfalls → Real-time As-You-Type Filtering |
+| 2026-10 | Client-side dropdown option instant filter saat mengetik nama | Pitfalls → Real-time As-You-Type Filtering |
+| 2026-10 | Tombol unduh PDF dan cetak print dialog disusun sejajar simetris satu baris | Pitfalls → Dual-Action Alignment in Management Toolbars |
 | 2026-10 | Cegah simbol ganda pada tombol aksi: jangan gabungkan SVG icon plus dengan karakter teks `+` (`+ + Tambah`) | Pitfalls → Mobile PWA UI & Typography Hygiene |
 | 2026-10 | Broadcast agenda massal dari Admin/Super Admin ke seluruh akun bruder via batch `PersonalAgenda` | Pitfalls → Broadcast Agenda Pattern |
 | 2026-10 | Toolbar kontekstual: ganti tombol ekspor Excel/PDF menjadi `+ Tambah Agenda` pada tab Agenda | Pitfalls → Context-Specific Action Toolbar Swapping |
