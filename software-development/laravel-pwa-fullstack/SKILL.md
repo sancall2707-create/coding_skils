@@ -122,6 +122,12 @@ Complete pattern for building production-ready PWA applications with Laravel 11 
 - **Pitfall**: Inconsistent system font fallbacks (e.g. mobile browser falling back to cursive/handwritten/monospace system fonts) or misaligned floating buttons on small screens.
 - **Fix**: Explicitly preload Google Fonts (`Plus Jakarta Sans` & `Inter`) in `<head>`, use standard mobile shell container (`max-width: 480px; margin: 0 auto;`), and ensure action buttons use full width (`width: 100%`) with proper padding and icon alignment rather than small absolute/floating blocks.
 - **Avoid Duplicate Action Icons and Literal Symbols in Buttons**: Jangan menggabungkan ikon visual (seperti SVG plus `+` atau ikon tong sampah) dengan karakter simbol teks yang sama di dalam label tombol (misal: `<svg>plus</svg> + Tambah Agenda`). Hal ini menyebabkan tampilan ganda yang janggal di mata pengguna (`+ + Tambah Agenda`). Gunakan **hanya** ikon SVG atau simbol teks, tidak keduanya secara bersamaan: `<svg>...</svg> <span>Tambah Agenda</span>`.
+- **Clean Search Placeholders without Decorative Emojis**: Jangan menaruh emotikon dekoratif (seperti `🔍`) di dalam teks placeholder kolom pencarian (`placeholder="Cari nama bruder..."`). Pengguna menginginkan antarmuka yang formal, bersih, dan profesional tanpa hiasan emotikon visual yang tidak perlu di kolom input.
+- **MCP Hosting Discovery without Modifying Working Apps**: Ketika diminta memeriksa kapasitas atau spesifikasi hosting melalui MCP (`mcp.formatio-fic.com`) tanpa mengganggu aplikasi aktif:
+  1. MCP OAuth token tersimpan di `$HERMES_HOME/mcp-tokens/<server_name>.json`.
+  2. Jika token kedaluwarsa (HTTP 401), lakukan refresh menggunakan `refresh_token` ke endpoint `oauth/token`.
+  3. Panggil tool MCP secara read-only (`get_account_info`, `list_domains`, `get_disk_usage`) via JSON-RPC `tools/call`.
+  4. Analisis kapasitas domain (`maximum_addon_domains`, `maximum_subdomains`, RAM LVE `pmem`, dan kuota disk) secara akurat dari data server asli tanpa menyentuh file aplikasi atau konfigurasi web yang sedang berjalan.
 - **User review pattern**: When a user marks/circles a UI element in a screenshot, treat it as targeted feedback on that component. Fix the specific visual problem first (size, positioning, alignment, tap target, whitespace) before broad redesign.
 - **Profile Avatar Centering in Forms**: Jangan pernah menaruh thumbnail foto profil / avatar di tepi kiri formulir. Posisikan avatar tepat di tengah secara horizontal (`margin: 0 auto 10px; display: block; border-radius: 50%`) dengan bingkai rapi, diikuti nama dan username terpusat di bawahnya.
 - **Consistent Back Navigation in Subpages**: Jangan menaruh tombol teks kembali melayang di pojok kanan kartu konten (seperti `← Ke Beranda`). Gunakan layout subheader standar PWA dengan tombol panah kembali (`<` back button) yang konsisten di baris navigasi atas.
@@ -474,6 +480,8 @@ Complete pattern for building production-ready PWA applications with Laravel 11 
 ## Session Patterns (Quick Reference)
 | Sesi | Teknik | Lokasi |
 |------|--------|--------|
+| 2026-10 | Bersihkan placeholder pencarian dari emotikon dekoratif (`🔍`) agar tampilan formal | Pitfalls → Mobile PWA UI & Typography Hygiene |
+| 2026-10 | Probing kapasitas hosting via MCP OAuth (`get_account_info`, `list_domains`) tanpa ganggu PWA | Pitfalls → MCP Hosting Discovery |
 | 2026-10 | Cegah teks template Blade mentah: gunakan `{{ '@' . $var }}` bukan `@{{ $var }}` | Pitfalls → Blade Escape Syntax Awareness |
 | 2026-10 | Real-time live search (input debounce 250ms + AbortController + `$request->ajax()`) | Pitfalls → Real-time As-You-Type Filtering |
 | 2026-10 | Client-side dropdown option instant filter saat mengetik nama | Pitfalls → Real-time As-You-Type Filtering |
