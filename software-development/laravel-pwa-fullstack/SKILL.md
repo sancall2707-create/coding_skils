@@ -477,9 +477,40 @@ Complete pattern for building production-ready PWA applications with Laravel 11 
 - **Root Cause**: Di Laravel Blade, `@{{ ... }}` adalah escape sequence yang dirancang untuk framework JS (Vue/Alpine). Blade akan membiarkan string tersebut dan mencetaknya mentah-mentah ke halaman browser sebagai teks: `"{{ $journal->user->username ?? '' }}"`. Pengguna akan melihat kode template mentah di antarmuka ("ini code apa kok tampil?").
 - **Fix**: Selalu gunakan konkatenasi string PHP di dalam kurung kurawal Blade: `{{ '@' . ($journal->user->username ?? '') }}`.
 
+### Login 419 Page Expired: Penanganan Token CSRF Basi (Halaman Login PWA)
+- **Gejala**: pengguna melihat halaman gelap "419 | PAGE EXPIRED" saat login dari HP (halaman login dibiarkan terbuka, tombol kembali, PWA lama di latar belakang).
+- **Akar masalah**: token CSRF di HTML login basi (halaman dipulihkan dari cache/bfcache) atau sesi file `SESSION_LIFETIME=120` sudah habis. `trustProxies` biasanya sudah benar; jangan berhenti di situ.
+- **Perbaikan berlapis** (semua dipakai bersama):
+  1. Controller `create()` login mengembalikan `response()->view('auth.login')->header('Cache-Control','no-store, no-cache, must-revalidate, max-age=0')->header('Pragma','no-cache')`.
+  2. JS di halaman login: `pageshow` dengan `event.persisted` => `location.reload()`; `visibilitychange` yang tersembunyi >10 menit => reload.
+  3. Handler pengecualian ramah di `bootstrap/app.php` (`withExceptions`): redirect ke `route('login')` + `withInput($request->only('username','remember'))` + `withErrors(['username' => 'Halaman login kedaluwarsa. ...'])`, hanya untuk tamu (`! auth()->check()`) dan bukan JSON.
+  4. Naikkan `SESSION_LIFETIME` (mis. 720 menit) di `.env` — cadangkan `.env` dulu ke `/home/ubuntu/backups/` (chmod 600), lalu `php artisan config:clear`.
+  5. `sw.js`: jangan `cache.put` respons yang `response.redirected` atau yang URL akhirnya `/login`; naikkan `CACHE_VERSION`.
+- **PITFALL KRUSIAL**: `render(function (TokenMismatchException $e) ...)` TIDAK PERNAH terpanggil. `Handler::prepareException()` mengubah `TokenMismatchException` menjadi `HttpException(419)` sebelum `renderViaCallbacks`. Tangkap `\Symfony\Component\HttpKernel\Exception\HttpException` lalu cek `$e->getStatusCode() === 419`. (Terbukti: tes pertama gagal 419 sebelum diganti.)
+- **Tes**: (a) header login memuat `no-store`; (b) rute uji `Route::middleware('web')->post('/_uji-419', fn() => throw new TokenMismatchException)` lalu `->assertRedirect(route('login'))` + `assertSessionHasErrors('username')`; (c) login normal tetap berhasil.
+- **Verifikasi di domain publik** dengan skrip Python `urllib` + `CookieJar` (token basi `TOKEN_BASI` vs token valid hasil scrape `name="_token"`), cek `PAGE EXPIRED` tidak ada dan teks alert benar. Hindari `curl -L -X POST` (curl memaksa POST ke halaman tujuan redirect sehingga hasil menyesatkan); pakai `-d` tanpa `-X POST`.
+
+### Urutan Agenda "Terdekat Dulu" (Bukan Terbaru-ke-Lama)
+- **Permintaan user**: agenda tgl 5 Nov di atas tgl 8 Nov; urutan menyesuaikan tanggal terdekat, bukan waktu pembuatan.
+- **Pola**: di controller halaman Agenda saja (jangan ubah `PersonalScheduleQuery::forUser()` karena dipakai kalender/beranda): pisah koleksi menjadi mendatang (`starts_at >= now()`, `sortBy` naik) lalu `concat` yang sudah lewat (`sortByDesc`, terbaru lewat dulu), `->values()`.
+- **Tes**: `travelTo()` tetapkan tanggal, buat agenda sengaja acak, `assertSeeInOrder([...])`. Kolom model `PersonalAgenda` adalah `start_at` (bukan `starts_at`; objek item query memakai `starts_at`).
+
+### Layar Putih/Blank Berkala: Audit Dulu, Jangan Menyalahkan Jaringan
+- **Gejala**: halaman (Agenda, Sapaan) putih kosong sesekali; user bilang internet bagus.
+- **Akar masalah yang terbukti**: `php artisan serve` dijalankan tanpa systemd. Saat prosesnya mati/di-restart, Caddy membalas **502 dengan badan 0 byte**, browser menampilkan layar putih. Restart manual oleh agen saat deploy ikut menyumbang kejadian (waktu 502 cocok dengan waktu restart).
+- **Urutan audit (hanya baca)**: log Laravel -> waktu render per halaman via skrip PHP -> semua URL `PRECACHE_URLS` HTTP 200 -> log Caddy 14 hari (`connection refused` ke port app) -> cara server berjalan (`pstree`, systemd, cron) -> `top` dan memori.
+- **Perbaikan (minta persetujuan dulu)**: unit systemd `Restart=always`; Caddy `lb_try_duration 6s` + `handle_errors` HTML ramah dengan auto-refresh; `PHP_CLI_SERVER_WORKERS=4`. Buktikan di Caddy uji terpisah (port 18081/18082, `admin off`), jangan sentuh Caddy produksi. Detail dan skrip di `references/blank-white-screen-audit-caddy-502.md`.
+- **Aturan kerja**: jangan restart server produksi hanya untuk "mengetes"; tiap restart = potensi blank bagi pengguna.
+
 ## Session Patterns (Quick Reference)
 | Sesi | Teknik | Lokasi |
 |------|--------|--------|
+| 2026-11 | Token Push Cleanup on Logout: hapus `push_subscriptions` user saat logout agar notifikasi tidak nyasar lintas akun | Support References → `web-push-android-pwa-badging.md` |
+| 2026-11 | TWA (Trusted Web Activity) APK Packaging + Digital Asset Links (`.well-known/assetlinks.json`) untuk lencana notifikasi mandiri di Android tanpa tumpangan Chrome | Support References → `twa-android-apk-packaging-assetlinks.md` |
+| 2026-11 | Web Push Android + Badge Lonceng PWA: minishlink v11 constructor fix, SW push handler, penanda belum dibaca via localStorage | Support References → `web-push-android-pwa-badging.md` |
+| 2026-11 | Blank putih = 502 kosong dari Caddy saat `artisan serve` mati; audit baca-saja + uji Caddy terisolasi | Pitfalls → Layar Putih/Blank Berkala |
+| 2026-11 | 419 login: tangkap `HttpException` 419 (bukan `TokenMismatchException`), login `no-store`, reload pageshow, sesi 12 jam | Pitfalls → Login 419 Page Expired |
+| 2026-11 | Agenda urut terdekat: mendatang naik + lewat turun, hanya di controller halaman | Pitfalls → Urutan Agenda Terdekat Dulu |
 | 2026-10 | Bersihkan placeholder pencarian dari emotikon dekoratif (`🔍`) agar tampilan formal | Pitfalls → Mobile PWA UI & Typography Hygiene |
 | 2026-10 | Probing kapasitas hosting via MCP OAuth (`get_account_info`, `list_domains`) tanpa ganggu PWA | Pitfalls → MCP Hosting Discovery |
 | 2026-10 | Cegah teks template Blade mentah: gunakan `{{ '@' . $var }}` bukan `@{{ $var }}` | Pitfalls → Blade Escape Syntax Awareness |
@@ -500,6 +531,10 @@ Complete pattern for building production-ready PWA applications with Laravel 11 
 | 2026-10 | Form `value` kosong pada create view — gunakan `placeholder` bukan hardcode nama contoh | Pitfalls → Form Creation Field Cleanliness |
 
 ## Support References
+- `references/twa-android-apk-packaging-assetlinks.md` — Pola pembungkusan TWA (Trusted Web Activity) APK mandiri, Digital Asset Links (`.well-known/assetlinks.json`), strategi build hemat resource VPS via PWABuilder, dan isolasi lencana notifikasi Android.
+- `references/web-push-android-pwa-badging.md` — Pola Web Push PWA Android (VAPID, minishlink v11 konstruktor pitfall, SW push & notificationclick, badge lonceng, dan penanda belum dibaca tanpa tulis DB).
+- `references/blank-white-screen-audit-caddy-502.md` — audit layar putih/502: urutan diagnosa baca-saja, parsing log Caddy, usulan systemd + retry Caddy, uji Caddy terisolasi, pitfall alat (pkill/heredoc).
+- `references/session-pitfalls-login-419-agenda-order-restyle.md` — 419 login (tangkap `HttpException` 419, bukan `TokenMismatchException`), urutan agenda terdekat-dulu, restyle elegan tanpa ubah fitur, pitfall heredoc `&` di terminal.
 - `references/production-sqlite-safeguards.md` — SQLite production safeguards: RefreshDatabase wipe prevention, kill-switch, automated hourly crontab backup script, and disaster recovery.
 - `references/bruder-fic-phase-delivery.md` — Phase-gated delivery, Cloudflare proxy session fixes, mobile UX header back buttons, profile fields, character counters
 - `references/service-worker-security.md` — SW caching rules, Network-first vs Cache-first patterns, security verification, versioned SW registration
