@@ -39,8 +39,24 @@ Uji fitur yang peka lingkungan di harness ini: PDF raport (Chrome headless via `
 ## Stabilitas produksi: systemd + uji hosting
 Produksi `artisan serve` pernah mati sendiri (502 nyata). Sekarang dikelola `pwa-bruder.service` (Restart=always, enabled). Resep, urutan peralihan aman (nyalakan unit dalam satu rantai; JANGAN matikan proses lama lewat tool proses yang menjadi induk perintah berjalan, situs 502 ~1 menit), dan langkah uji subdomain `uji.formatio-fic.com` via MCP (create_subdomain, git_deploy, wajib ubah docroot ke `uji/public`): `references/systemd-artisan-serve-dan-uji-hosting.md`.
 
+## Eksekusi bertahap optimasi beban (sesi 6 Nov 2026)
+Ketika user setuju optimasi kapasitas untuk 50 user serentak:
+1. **Solusi 1 (BCRYPT_ROUNDS)**: Ubah `BCRYPT_ROUNDS=10` di `.env` lalu `php artisan config:clear`. Verifikasi: cost 12 ~1,2 detik vs cost 10 ~0,3 detik (CPU VPS saat ini). Password lama tetap valid karena bcrypt menyimpan cost di hash header (`$2y$12$...`). DB tidak disentuh (0% migrasi), tes user login pass.
+2. **Solusi 2 (Multi-worker systemd)**: Tambahkan `Environment=PHP_CLI_SERVER_WORKERS=4` di `/etc/systemd/system/pwa-bruder.service`. Backup unit lama, `sudo systemctl daemon-reload && sudo systemctl restart pwa-bruder.service`. Verifikasi: 4 request paralel serentak merespons 200 via `ThreadPoolExecutor`.
+3. **Solusi 3 (Cache build Laravel - PERINGATAN JEBAKAN config:cache)**:
+   - **JANGAN jalankan `config:cache` pada proyek Laravel SQLite yang menggunakan `RefreshDatabase`**: Menjalankan `config:cache` membekukan koneksi database default ke berkas fisik (`database.sqlite`) di dalam `bootstrap/cache/config.php`. Ketika suite tes (`php artisan test`) dijalankan, runner tes tidak lagi bisa meng-override koneksi ke in-memory (`:memory:`), sehingga tes mengeksekusi migrasi/rollback pada database fisik produksi dan memicu proteksi keamanan atau mengosongkan tabel!
+   - Jika terlanjur dijalankan: segera jalankan `php artisan config:clear` dan pulihkan database dari backup terbaru.
+   - Yang AMAN dan direkomendasikan untuk produksi: **`php artisan view:cache`** (cache template Blade) dan **`php artisan event:cache`**. Keduanya menghemat I/O disk saat rendering HTML tanpa mengunci konfigurasi database.
+   - `route:cache` tetap dilarang jika ada closure route di `routes/web.php`.
+4. Selalu cadangkan DB (`backup-pwa-bruder.sh`) dan cek MD5 `database.sqlite` sebelum & sesudah tiap langkah untuk membuktikan 0% data loss.
+
 ## Evaluasi pindah ke hosting DomaiNesia (nimbus_go)
 Detail dan klien MCP: `references/mcp-domainesia-evaluasi.md`. Ringkas: 1 core, 1 GB RAM, entry process 12 (request ke-13 bisa 508), Chrome headless belum terverifikasi (PDF raport berisiko mati), MCP baru >100 tool tapi tetap tanpa eksekusi shell/composer (SSH aktif, agen tak punya kredensial); lebih kecil dari VPS, jadi bukan peningkatan. Repo tidak membawa `database.sqlite`/`storage/app`; deploy tanpa data = data loss.
+
+## Catatan sesi 5 Nov 2026
+- Sebelum git_deploy ke hosting, cek repo publik/privat (`curl api.github.com/repos/<owner>/<repo>`, field private) dan `git ls-files twa-release`: repo ini publik dan sempat memuat keystore APK (lihat skill `pwa-web-push-twa`).
+- Deploy git ke hosting tanpa `vendor/` dan `.env` menghasilkan HTTP 500 kosong; MCP tidak bisa `composer install`. Docroot awal `uji` membuka `artisan`/`README.md` lewat web sampai diganti `uji/public`.
+- Panduan pengguna bergambar: skill `app-user-manual-book`.
 
 ## Pitfalls skrip
 - Hapus `&` dari heredoc foreground atau tulis skrip via write_file.

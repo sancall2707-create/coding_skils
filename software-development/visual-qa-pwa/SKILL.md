@@ -72,6 +72,32 @@ browser_vision "check icon overlap, nested cards, tab radius, filter alignment, 
 
 ## New Patterns from Space Link Audit (Sep 2025)
 
+### Mobile Form Controls & Touch Target Patterns (Nov 2026)
+- **Time Input Pickers on Varied Android Hardware (`<input type="time">` vs Dual Selects)**:
+  - *Problem*: Native HTML5 `<input type="time">` renders disparate clock-picker dialogs across vendor OEM Android builds (MIUI/HyperOS, ColorOS, FunTouchOS). In many devices with large system display/font scaling, the circular clock dial cuts off the right-hand action buttons (`Set` / `Simpan`), making time selection impossible or frustrating.
+  - *Solution*: Replace raw `<input type="time">` with a dual-dropdown component (`<x-time-select>`):
+    1. Dropdown 1: `Jam` (`Jam 00` s.d. `Jam 23`).
+    2. Separator colon `:` and Dropdown 2: `Menit` (interval 5 menit: `Menit 00`, `Menit 05`, ..., `Menit 55`), followed by timezone label (e.g. `WIB`).
+    3. Hidden input carrying the standard `HH:mm` format bound to the original field name, updated synchronously on change via JS.
+    4. 100% backend compatibility: controllers and validators (`date_format:H:i` or regex `^\d{2}:\d{2}$`) receive the exact expected string without database or API changes.
+- **Symmetrical Close Buttons (SVG vs HTML Entity `&times;`)**:
+  - *Problem*: Using raw HTML entity `&times;` or `×` in modal/drawer close buttons causes severe vertical misalignment and asymmetry depending on device/OS system font (often looks tilted, off-center, or too thin).
+  - *Solution*: Always use a balanced inline SVG cross (`width="18" height="18" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"`) inside a centered container (`display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; padding: 0;`).
+- **Resilient Mobile Card Header & Status Badge Layout (Preventing Pill Wrapping)**:
+  - *Problem*: When displaying a title/name and a status badge side-by-side in a mobile card header, long names (e.g. titles with titles/suffixes) crowd the badge, causing multi-letter words like `Terkirim` to break onto two lines (e.g. `Terkiri` / `m`).
+  - *Solution*:
+    1. Parent container: `display: flex; justify-content: space-between; align-items: flex-start; gap: 8px atau 10px;`.
+    2. Left column (title/name): `flex: 1; min-width: 0; word-break: break-word; line-height: 1.35;`.
+    3. Right column (badge/label): `flex-shrink: 0; white-space: nowrap; line-height: 1.2; padding: 4px 10px;`. This guarantees the badge never wraps or truncates regardless of viewport width or title length.
+- **Compact Circular Action Icons in Feed Rows**:
+  - In crowded mobile checklist or feed rows, avoid bulky pill buttons with text (e.g. `+ Isi` taking up 76px width) that compress or truncate adjacent labels.
+  - Use compact circular icon buttons (e.g. `34x34px rounded-full` containing an SVG `+` or icon, vertically centered in the row) with explicit `aria-label` and `title` attributes for accessibility and screen readers.
+- **PWA Role-Based Start URL & Landing Experience**:
+  - In mobile PWAs where all users enter through root `start_url: "/"`, ensure the root route dynamically redirects authenticated personas to their designated primary view (e.g. regular members to latest organizational broadcast/announcements, admins to management portals) instead of defaulting everyone to a generic dashboard.
+- **Provincial vs Personal Agenda Access & Immutability Scoping**:
+  - Organization-wide / broadcast schedules replicated to individual member calendars must be strictly read-only for members: hide action buttons (Edit/Hapus) in both list and calendar views, and enforce server-side authorization guards (abort 403) on mutation endpoints.
+  - Distinguish category labels accurately: member schedules display as "Agenda pribadi", while administrative broadcasts must explicitly label as "Agenda Provinsi" across cards, calendar previews, and reminders.
+
 ### Admin sub-dashboard must expose "Back to Home"
 - Add a prominent `Kembali ke Beranda` (or `Back to Dashboard`) button in the admin hero/header, not rely on logo click alone.
 - Place it on the right side of the header banner, using `Link to="/"`.
