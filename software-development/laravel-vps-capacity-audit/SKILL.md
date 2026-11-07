@@ -50,6 +50,17 @@ Ketika user setuju optimasi kapasitas untuk 50 user serentak:
    - `route:cache` tetap dilarang jika ada closure route di `routes/web.php`.
 4. Selalu cadangkan DB (`backup-pwa-bruder.sh`) dan cek MD5 `database.sqlite` sebelum & sesudah tiap langkah untuk membuktikan 0% data loss.
 
+## Penanganan Zombie Loop Snap CUPS / Chromium (Sesi 7 Nov 2026)
+- **Gejala:** Website melambat bertahap, load average tembus 4-5 pada server 2-core, `ps aux` menunjukkan proses root `/bin/bash /snap/bin/chromium run cups.cups-browsed` dan `cups.cupsd` memakan 40-50% CPU per proses secara konstan.
+- **Akar Masalah:** Snap package `cups` mencoba menjalankan daemon printing di server yang tidak memiliki hardware printer / interface terkait, menyebabkan infinite busy-loop.
+- **Penting:** PWA Bruder FIC mencetak PDF menggunakan `google-chrome-stable` (paket `.deb` resmi Google), BUKAN snap chromium / cups.
+- **Solusi Permanen (Sudo):**
+  1. Hentikan dan matikan autostart service systemd snap:
+     `sudo systemctl stop snap.cups.cups-browsed.service snap.cups.cupsd.service`
+     `sudo systemctl disable snap.cups.cups-browsed.service snap.cups.cupsd.service`
+  2. JANGAN hanya melakukan `sudo kill -9` pada PID bash/chromium karena systemd snap akan otomatis melakukan restart spawn PID baru. Wajib `systemctl stop` & `disable`.
+  3. Verifikasi: `ps aux | grep -E "cups|chromium"` harus kosong, dan waktu respon web langsung kembali normal (< 0.05 detik).
+
 ## Evaluasi pindah ke hosting DomaiNesia (nimbus_go)
 Detail dan klien MCP: `references/mcp-domainesia-evaluasi.md`. Ringkas: 1 core, 1 GB RAM, entry process 12 (request ke-13 bisa 508), Chrome headless belum terverifikasi (PDF raport berisiko mati), MCP baru >100 tool tapi tetap tanpa eksekusi shell/composer (SSH aktif, agen tak punya kredensial); lebih kecil dari VPS, jadi bukan peningkatan. Repo tidak membawa `database.sqlite`/`storage/app`; deploy tanpa data = data loss.
 
