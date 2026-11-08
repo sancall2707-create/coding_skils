@@ -502,9 +502,21 @@ Complete pattern for building production-ready PWA applications with Laravel 11 
 - **Perbaikan (minta persetujuan dulu)**: unit systemd `Restart=always`; Caddy `lb_try_duration 6s` + `handle_errors` HTML ramah dengan auto-refresh; `PHP_CLI_SERVER_WORKERS=4`. Buktikan di Caddy uji terpisah (port 18081/18082, `admin off`), jangan sentuh Caddy produksi. Detail dan skrip di `references/blank-white-screen-audit-caddy-502.md`.
 - **Aturan kerja**: jangan restart server produksi hanya untuk "mengetes"; tiap restart = potensi blank bagi pengguna.
 
+- **Time-Picker Native OS Cut-off vs Symmetrical Dropdowns**: Dialog pemilih jam bawaan Android (`<input type="time">`) kerap menampilkan lingkaran jam jarum yang tombol "Set/Simpan"-nya terpotong tepi kanan pada HP tertentu (Xiaomi, Oppo, Vivo) atau sulit diputar presisi. Ganti dengan komponen dua `<select>` berdampingan (Jam `00-23` & Menit kelipatan `00-55`) yang dipisahkan titik dua `:` dan label zona waktu `WIB`, lalu gabungkan nilainya ke `<input type="hidden">` berformat `HH:mm` agar kompatibel 100% dengan validasi backend tanpa mengubah struktur DB/controller.
+- **Drawer Navigation Close Button Centering**: Hindari karakter teks HTML mentah `&times;` / `×` pada tombol penutup (X) menu drawer karena rentan bergeser dari titik tengah secara vertikal tergantung font sistem perangkat. Gunakan ikon SVG simetris presisi dengan wrapper `inline-flex; align-items:center; justify-content:center;`.
+- **Card Badge Line-Wrap Clamping (Patah Kata Terkirim)**: Pada kartu daftar yang menampilkan nama pengguna panjang di sebelah badge status pill (misal badge `Terkirim`), berikan `white-space: nowrap; flex-shrink: 0;` pada badge status dan `flex: 1; min-width: 0; word-break: break-word;` pada judul/nama agar teks badge tidak terdorong dan patah baris menjadi `Terkiri` / `m`.
+- **PWA/TWA Repeated Image Download Sluggishness**: Jika PWA/TWA terasa berat dan selalu mengunduh ulang gambar tiap berpindah halaman:
+  1. Periksa `sw.js`: pastikan endpoint gambar/avatar berversi (misal `/profil/foto?v=hash`) tidak diblokir total di `isPrivateAsset()`, gunakan caching bertarget (Stale-While-Revalidate).
+  2. Periksa response header di controller: jangan gunakan `no-store` untuk gambar yang sudah memiliki query parameter hash versi (`?v=hash`). Berikan `Cache-Control: private, max-age=86400, stale-while-revalidate=604800` dengan ETag.
+  3. Kompres gambar statis besar (seperti logo PNG ratusan KB) ke WebP atau PNG teroptimasi agar instan pada koneksi seluler lambat.
+
 ## Session Patterns (Quick Reference)
 | Sesi | Teknik | Lokasi |
 |------|--------|--------|
+| 2026-11 | Native time-picker cut-off dialihkan ke twin select (jam:menit) + hidden HH:mm | Pitfalls → Mobile PWA UI |
+| 2026-11 | Drawer close button X presisi SVG + inline-flex centering | Pitfalls → Mobile PWA UI |
+| 2026-11 | Card status badge nowrap + min-width:0 name truncation cegah patah kata Terkiri/m | Pitfalls → Mobile PWA UI |
+| 2026-11 | Zombie snap cups infinite loop mitigasi via systemctl stop & disable | SKILL.md → Penanganan Zombie Loop |
 | 2026-11 | Token Push Cleanup on Logout: hapus `push_subscriptions` user saat logout agar notifikasi tidak nyasar lintas akun | Support References → `web-push-android-pwa-badging.md` |
 | 2026-11 | TWA (Trusted Web Activity) APK Packaging + Digital Asset Links (`.well-known/assetlinks.json`) untuk lencana notifikasi mandiri di Android tanpa tumpangan Chrome | Support References → `twa-android-apk-packaging-assetlinks.md` |
 | 2026-11 | Web Push Android + Badge Lonceng PWA: minishlink v11 constructor fix, SW push handler, penanda belum dibaca via localStorage | Support References → `web-push-android-pwa-badging.md` |
