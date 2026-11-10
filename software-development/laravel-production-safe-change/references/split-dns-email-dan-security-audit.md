@@ -72,7 +72,14 @@ Saat pengguna atau bruder muda melakukan *Inspect Element* / *DevTools* pada PWA
      - `X-Content-Type-Options: nosniff`.
      - `Referrer-Policy: strict-origin-when-cross-origin`.
      - `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HSTS).
+     - `Content-Security-Policy`: Batasi sumber skrip, font, dan image yang sah.
    - Validasi Caddy via `sudo caddy validate --config /etc/caddy/Caddyfile` lalu reload `sudo systemctl reload caddy`. Cek via `curl -I -s https://formatio-fic.com/login`.
+4. **Audit Dependensi `composer audit`**
+   - Paket Symfony dan CommonMark wajib diperiksa berkala (`composer audit`). Kerentanan ReDoS pada markdown parser dan bypass path URL pada komponen Symfony dapat diselesaikan dengan `composer update symfony/* league/commonmark --with-dependencies` setelah verifikasi 165 tes lokal.
+5. **Privasi Portal Formasi Internal (Robots.txt & Meta Noindex)**
+   - Portal privat biara wajib menyetel `Disallow: /` di `public/robots.txt` dan menyertakan `<meta name="robots" content="noindex, nofollow, noarchive">` agar data tidak diindeks mesin pencari publik.
+6. **Batasan Trusted Proxies**
+   - Hindari `trustProxies(at: '*')` tanpa validasi. Batasi ke loopback (`127.0.0.1`, `::1`) dan rentang CIDR proxy tepercaya.
 
 ### B. False Positives (Hal Normal yang Sering Dikira Kebocoran oleh Pemula)
 - **CSRF Token di `<meta name="csrf-token" content="...">`**: Ini adalah mekanisme pertahanan standar web terhadap Cross-Site Request Forgery, bukan token rahasia yang bocor.

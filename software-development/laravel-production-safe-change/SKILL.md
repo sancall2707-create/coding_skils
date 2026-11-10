@@ -93,3 +93,13 @@ Kolom `personal_agendas.is_provincial` + `broadcast_key`; `PersonalAgenda::upcom
 ## Infrastruktur & Audit Keamanan (referensi)
 - Split DNS Web VPS vs Email cPanel (DomaiNesia), Cron backup DB ke Telegram (`no_agent: true` + Python zipfile + `MEDIA:`), dan penanganan temuan celah keamanan inspect browser (`APP_DEBUG=true`, header `X-Powered-By`, serta false positive CSRF/VAPID): rincian di `references/split-dns-email-dan-security-audit.md`.
 
+## Prosedur Mode Pemeliharaan (Maintenance Mode 503) & Hardening
+- **Protokol Komunikasi Pengguna**: Sebelum mengaktifkan `artisan down`, selalu buat draf tampilan teks `503` terlebih dahulu dan mintakan persetujuan user. Salam wajib santun biara/pengguna ("Berkah Dalem, Para Bruder yang Terkasih"), minta maaf atas ketidaknyamanan, dan nyatakan alasan sebagai "pemeliharaan sistem & peningkatan performa berkala". **Dilarang keras menyebut perbaikan celah/keamanan kepada pengguna** agar tidak menimbulkan kepanikan.
+- **Perintah Eksekusi**: `php artisan down --render="errors.503" --secret="<kunci-bypass>" --refresh=60`. Opsi `--refresh=60` otomatis me-refresh browser pengguna tiap 60 detik sehingga begitu `php artisan up` dijalankan, layar aplikasi di HP pulih tanpa intervensi manual.
+- **Jebakan Pengujian saat Mode Pemeliharaan**: File penanda `storage/framework/down` menyebabkan seluruh request HTTP pada suite tes (`php artisan test`) menerima status 503 (bukan 200). Selalu angkat sementara (`php artisan up`), jalankan tes 100%, lalu kunci kembali (`php artisan down ...`).
+- **Hardening Dependensi Tanpa Breaking Changes**: Perbarui spesifik paket yang terkena advisory CVE dengan `composer update "symfony/*" "league/commonmark" --with-dependencies`. Selalu uji dry-run lebih dulu, cek `composer audit` (harus 0 advisories), dan pastikan seluruh test suite pass sebelum service di-restart.
+- **Content-Security-Policy (CSP) Aman untuk PWA**: Pasang di reverse proxy (Caddy):
+  `Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self';"`
+- **Proteksi Crawling Portal Internal**: Pasang `Disallow: /` di `public/robots.txt` dan sisipkan `<meta name="robots" content="noindex, nofollow, noarchive">` di partial icon/layout bersama (`partials/fic-icons.blade.php`).
+
+
