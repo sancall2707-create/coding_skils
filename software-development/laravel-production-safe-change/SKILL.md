@@ -87,6 +87,9 @@ Header `.sa-header` (lencana `.sa-badge`, `.sa-title`, `.sa-subtitle`) ada di `l
 - Ukur dulu, baru "rapikan": mis. avatar 38px vs tombol menu 40px -> samakan 40px. Jangan menebak. Subjudul yang sudah 2 baris di 320px sebelum perubahan = bukan akibat kita (bandingkan dengan rekaman sebelum).
 - Tulisan lama yang tersisa di luar permintaan (nama penulis bawaan form, teks halaman catatan, tombol "Kembali ke Beranda TPPBM") dilaporkan sebagai opsi, tidak diubah diam-diam.
 
+## Error 419 Page Expired di login (referensi)
+Cek `SESSION_LIFETIME`, lalu log Caddy (`sudo`) untuk status 419; log Laravel tidak mencatatnya. Penyebab nyata di Bruder: tap ganda tombol LOGIN (bukan kadaluarsa). Perbaikan: submit-guard di `auth/login.blade.php`. Detail dan langkah: `references/diagnosa-419-page-expired.md`.
+
 ## Pola Agenda Provinsi (referensi)
 Kolom `personal_agendas.is_provincial` + `broadcast_key`; `PersonalAgenda::upcomingForOverview()` menggabungkan agenda provinsi per `broadcast_key` jadi satu kartu berlabel "Agenda Provinsi" dengan nama penulis **TPPBM** (user menolak "Seluruh Bruder Muda"), agenda pribadi tetap per bruder. Agenda "lainnya" yang ditulis role admin/super_admin otomatis `is_provincial=true`. Edit/hapus agenda provinsi berbasis `{key}` di tab Agenda Monitoring: detail di `references/agenda-provinsi-edit-hapus.md`.
 
